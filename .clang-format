@@ -1,0 +1,42 @@
+# # From Blender <3
+
+AlignAfterOpenBracket: 'Align'
+AllowShortBlocksOnASingleLine: true
+
+BinPackArguments: false
+BinPackParameters: false
+
+ColumnLimit: 99
+
+ConstructorInitializerIndentWidth: 4
+AccessModifierOffset: -4
+ContinuationIndentWidth: 4
+
+
+SpaceBeforeParens: ControlStatements
+SpaceInEmptyParentheses: false
+
+SpacesBeforeTrailingComments: 2
+
+ReflowComments: true
+
+UseTab: Never
+TabWidth: 4
+IndentWidth: 4
+
+PenaltyReturnTypeOnItsOwnLine: 10000
+
+PenaltyBreakAssignment: 100
+
+AllowShortFunctionsOnASingleLine: true
+
+SortIncludes: true
+
+AlignEscapedNewlines: DontAlign
+
+AlwaysBreakBeforeMultilineStrings: true
+
+PenaltyBreakString: 1000000
+
+InsertNewlineAtEOF: True
+KeepEmptyLinesAtEOF: False
