@@ -120,13 +120,15 @@ void ParticleRenderer::update_positions(const index_t index) {
 
 void ParticleRenderer::update_colors(const index_t index) {
     const auto system = m_items[index].lock();
-    const auto speeds = system->velocities();
+    const auto &speeds = system->velocities();
+    const auto &densities = system->densities();
     m_colors.resize(speeds.size());
     real_t max_speed = system->max_velocity();
     for (index_t i = 0; i < speeds.size(); i++) {
-        const real_t normalized_speed = glm::length(speeds[i]) / max_speed;
+        const real_t density_error = densities[i] - system->m_target_density;
+        // const real_t normalized_speed = glm::length(speeds[i]) / max_speed;
         // m_colors[i] = glm::vec3(normalized_speed, .5f, .5f);
-        m_colors[i] = speed_map(normalized_speed);
+        m_colors[i] = speed_map(density_error/100.f);
     }
     glNamedBufferSubData(m_color_vbo, 0, sizeof(vec3) * m_colors.size(), m_colors.data());
 }

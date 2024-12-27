@@ -10,28 +10,27 @@
 #include "ShaderProgram.hpp"
 #include "UI.hpp"
 #include "Window.hpp"
-#include "imgui.h"
 
 void build_scene() {
     auto resource_manager = G.resource_manager.lock();
 
-    const handle<MeshRenderer> mesh_renderer = resource_manager->add(make_ref<MeshRenderer>());
+    // const handle<MeshRenderer> mesh_renderer = resource_manager->add(make_ref<MeshRenderer>());
     const handle<ParticleRenderer> particle_renderer = resource_manager->add(
         make_ref<ParticleRenderer>());
     const handle<ShaderProgram> shader = resource_manager->add(
         ShaderProgram::genBasicShaderProgram("shaders/basic.vert", "shaders/basic.frag"));
-    const handle<Mesh> mesh = resource_manager->build_mesh();
-    const handle<Material> material = resource_manager->build_material(
-        shader, glm::vec3(0.5f, 0.3f, 0.1f));
+    // const handle<Mesh> mesh = resource_manager->build_mesh();
+    // const handle<Material> material = resource_manager->build_material(
+    // shader, glm::vec3(0.5f, 0.3f, 0.1f));
     const handle<BoundingBox> bounding_box = resource_manager->build_boundingbox();
     const handle<Transform> transform = resource_manager->build_transform();
     const handle<ParticleSystem> particle_system = resource_manager->build_particle_system();
 
-    mesh.lock()->addBox(1.f, 1.f, 1.f);
+    // mesh.lock()->addBox(1.f, 1.f, 1.f);
     // mesh.lock()->addPlane(1.f);
-    mesh.lock()->init();
+    // mesh.lock()->init();
 
-    mesh_renderer.lock()->add(material, mesh);
+    // mesh_renderer.lock()->add(material, mesh);
     particle_renderer.lock()->add(particle_system);
 }
 
