@@ -14,6 +14,10 @@ public:
     void swap_buffers() const;
     void poll_events() const;
 
+    const int width() const;
+    const int height() const;
+    const float get_aspect_ratio() const;
+
 private:
     GLFWwindow *window;
 };

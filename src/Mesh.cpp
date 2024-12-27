@@ -1,3 +1,4 @@
+#include <cstddef>
 #define _USE_MATH_DEFINES
 
 #include "Mesh.hpp"
@@ -427,6 +428,56 @@ void Mesh::clear() {
         glDeleteBuffers(1, &_ibo);
         _ibo = 0;
     }
+}
+
+ParticleMesh::ParticleMesh() : _vertices{}, _triangle_indices{} {
+    _vertices.push_back({.position = vec3(-1.f, 0.f, 0.f), .normal = vec3(-1.f, 0.f, 0.f)});
+    _vertices.push_back({.position = vec3(0.f, 1.f, 0.f), .normal = vec3(0.f, 1.f, 0.f)});
+    _vertices.push_back({.position = vec3(1.f, 0.f, 0.f), .normal = vec3(1.f, 0.f, 0.f)});
+    _vertices.push_back({.position = vec3(0.f, -1.f, 0.f), .normal = vec3(0.f, -1.f, 0.f)});
+    _vertices.push_back({.position = vec3(0.f, 0.f, 1.f), .normal = vec3(0.f, 0.f, 1.f)});
+    _vertices.push_back({.position = vec3(0.f, 0.f, -1.f), .normal = vec3(0.f, 0.f, -1.f)});
+
+    _triangle_indices.push_back(glm::uvec3(0, 1, 4));
+    _triangle_indices.push_back(glm::uvec3(1, 2, 4));
+    _triangle_indices.push_back(glm::uvec3(2, 3, 4));
+    _triangle_indices.push_back(glm::uvec3(3, 0, 4));
+
+    _triangle_indices.push_back(glm::uvec3(1, 0, 5));
+    _triangle_indices.push_back(glm::uvec3(2, 1, 5));
+    _triangle_indices.push_back(glm::uvec3(3, 2, 5));
+    _triangle_indices.push_back(glm::uvec3(0, 3, 5));
+}
+
+void ParticleMesh::init() {
+    size_t vertex_buffer_size = sizeof(ParticleMesh::Vertex) * _vertices.size();
+    glCreateBuffers(1, &_vertex_vbo);
+    void* ptr = _vertices.data();
+    glNamedBufferStorage(
+        _vertex_vbo, vertex_buffer_size, ptr, GL_DYNAMIC_STORAGE_BIT);
+
+    glCreateBuffers(1, &_ibo);
+    size_t index_buffer_size = sizeof(glm::uvec3) * _triangle_indices.size();
+    glNamedBufferStorage(
+        _ibo, index_buffer_size, _triangle_indices.data(), GL_DYNAMIC_STORAGE_BIT);
+
+    glCreateVertexArrays(1, &_vao);
+    glBindVertexArray(_vao);
+
+    glBindBuffer(GL_ARRAY_BUFFER, _vertex_vbo);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(ParticleMesh::Vertex), 0);
+
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1,
+                          3,
+                          GL_FLOAT,
+                          GL_FALSE,
+                          sizeof(ParticleMesh::Vertex),
+                          (void *)offsetof(ParticleMesh::Vertex, normal));
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _ibo);
+    glBindVertexArray(0);
 }
 
 // Loads an OFF mesh file. See https://en.wikipedia.org/wiki/OFF_(file_format)

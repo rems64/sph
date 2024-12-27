@@ -17,6 +17,24 @@ void Window::swap_buffers() const { glfwSwapBuffers(window); }
 
 void Window::poll_events() const { glfwPollEvents(); }
 
+const int Window::width() const {
+    int width, height;
+    glfwGetFramebufferSize(window, &width, &height);
+    return width;
+}
+
+const int Window::height() const {
+    int width, height;
+    glfwGetFramebufferSize(window, &width, &height);
+    return height;
+}
+
+const float Window::get_aspect_ratio() const {
+    int width, height;
+    glfwGetFramebufferSize(window, &width, &height);
+    return static_cast<float>(width) / static_cast<float>(height);
+}
+
 const real_t get_time() { return static_cast<real_t>(glfwGetTime()); }
 
 void init_windowing() {

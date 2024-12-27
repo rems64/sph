@@ -57,5 +57,29 @@ private:
     GLuint _ibo = 0;
 };
 
+class ParticleMesh {
+public:
+    ParticleMesh();
+
+    void init();
+    void render();
+
+    inline GLuint vao() const { return _vao; };
+    inline index_t triangles_count() const { return _triangle_indices.size(); };
+
+private:
+    struct Vertex {
+        vec3 position;
+        vec3 normal;
+    };
+
+    std::vector<Vertex> _vertices;
+    std::vector<glm::uvec3> _triangle_indices;
+
+    GLuint _vao = 0;
+    GLuint _vertex_vbo = 0;
+    GLuint _ibo = 0;
+};
+
 // utility: loader
 void loadOFF(const std::string &filename, std::shared_ptr<Mesh> meshPtr);
