@@ -120,7 +120,7 @@ void ParticleRenderer::update_positions(const index_t index) {
 
 void ParticleRenderer::update_colors(const index_t index) {
     const auto system = m_items[index].lock();
-    const auto speeds = system->speeds();
+    const auto speeds = system->velocities();
     m_colors.resize(speeds.size());
     real_t max_speed = 0;
     for (index_t i = 0; i < speeds.size(); i++) {

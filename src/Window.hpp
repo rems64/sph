@@ -18,6 +18,8 @@ public:
     const int height() const;
     const float get_aspect_ratio() const;
 
+    GLFWwindow *raw_window() const;
+
 private:
     GLFWwindow *window;
 };

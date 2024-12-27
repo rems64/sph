@@ -8,6 +8,7 @@
 #include "Renderer.hpp"
 #include "ResourceManager.hpp"
 #include "ShaderProgram.hpp"
+#include "UI.hpp"
 #include "Window.hpp"
 
 void build_scene() {
@@ -41,6 +42,8 @@ void init() {
     G.window = G.resource_manager.lock()->build_window(800, 600, "Smooth Particle Hydrodynamics");
 
     build_scene();
+
+    ui_init(G.window.lock()->raw_window());
 }
 
 void close() { close_windowing(); }
@@ -54,6 +57,8 @@ void update(real_t dt) {
 }
 
 void render() {
+    ui_new_frame();
+
     const auto window = G.window.lock();
     auto resource_manager = G.resource_manager.lock();
     const auto renderers = resource_manager->renderers();
@@ -63,6 +68,11 @@ void render() {
     for (const auto &renderer : renderers) {
         renderer->render();
     }
+
+    ImGui::Begin("Hello, world!");
+    ImGui::Text("This is some useful text.");
+    ImGui::End();
+    ui_render();
 }
 
 void frame(real_t dt) {

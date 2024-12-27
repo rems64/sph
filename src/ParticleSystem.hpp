@@ -11,9 +11,12 @@ public:
     void render();
 
     const std::vector<vec3> &positions() const;
-    const std::vector<vec3> &speeds() const;
+    const std::vector<vec3> &velocities() const;
 
 private:
     std::vector<vec3> m_positions;
-    std::vector<vec3> m_speeds;
+    std::vector<vec3> m_velocities;
+
+private:
+    vec3 m_extents;
 };

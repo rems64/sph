@@ -17,7 +17,14 @@ file(GLOB SRC
      "src/*.cpp"
 )
 
-add_executable(${PROJECT_NAME} ${SRC})
+# ImGui source
+file(GLOB IMGUI_SRC
+    "dep/imgui/*.cpp"
+    "dep/imgui/backends/imgui_impl_glfw.cpp"
+    "dep/imgui/backends/imgui_impl_opengl3.cpp"
+)
+
+add_executable(${PROJECT_NAME} ${SRC} ${IMGUI_SRC})
 
 
 add_subdirectory(dep/glad)
@@ -28,6 +35,8 @@ target_link_libraries(${PROJECT_NAME} PRIVATE glfw)
 target_link_libraries(${PROJECT_NAME} PRIVATE glm::glm-header-only)
 target_include_directories(${PROJECT_NAME} PRIVATE dep/glm/../)
 target_link_libraries(${PROJECT_NAME} PRIVATE ${CMAKE_DL_LIBS})
+
+target_include_directories(${PROJECT_NAME} PRIVATE dep/imgui/)
 
 add_custom_command(TARGET ${PROJECT_NAME}
   POST_BUILD

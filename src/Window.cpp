@@ -35,6 +35,8 @@ const float Window::get_aspect_ratio() const {
     return static_cast<float>(width) / static_cast<float>(height);
 }
 
+GLFWwindow *Window::raw_window() const { return window; }
+
 const real_t get_time() { return static_cast<real_t>(glfwGetTime()); }
 
 void init_windowing() {
