@@ -10,6 +10,7 @@
 #include "ShaderProgram.hpp"
 #include "UI.hpp"
 #include "Window.hpp"
+#include "imgui.h"
 
 void build_scene() {
     auto resource_manager = G.resource_manager.lock();
@@ -69,9 +70,8 @@ void render() {
         renderer->render();
     }
 
-    ImGui::Begin("Hello, world!");
-    ImGui::Text("This is some useful text.");
-    ImGui::End();
+    G.resource_manager.lock()->particle_systems()[0]->imgui_controls();
+
     ui_render();
 }
 

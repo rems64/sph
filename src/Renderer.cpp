@@ -122,10 +122,7 @@ void ParticleRenderer::update_colors(const index_t index) {
     const auto system = m_items[index].lock();
     const auto speeds = system->velocities();
     m_colors.resize(speeds.size());
-    real_t max_speed = 0;
-    for (index_t i = 0; i < speeds.size(); i++) {
-        max_speed = glm::max(max_speed, glm::length(speeds[i]));
-    }
+    real_t max_speed = system->max_velocity();
     for (index_t i = 0; i < speeds.size(); i++) {
         const real_t normalized_speed = glm::length(speeds[i]) / max_speed;
         // m_colors[i] = glm::vec3(normalized_speed, .5f, .5f);
