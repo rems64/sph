@@ -15,12 +15,18 @@ struct Timings {
     real_t time = 0.0;
 };
 
+struct Debug {
+    uint32_t missed_cells;
+};
+
 // Globals doesn't own any memory, except static strings
 struct Globals {
     const char *application_name = "OpenGL Boilerplate";
     uint32_t application_flags = APP_RUNNING;
 
     struct Timings t;
+
+    struct Debug debug;
 
     handle<Window> window;
     handle<ResourceManager> resource_manager;

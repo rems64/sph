@@ -10,6 +10,7 @@
 #include "ShaderProgram.hpp"
 #include "UI.hpp"
 #include "Window.hpp"
+#include "imgui.h"
 
 void build_scene() {
     auto resource_manager = G.resource_manager.lock();
@@ -70,6 +71,10 @@ void render() {
     }
 
     G.resource_manager.lock()->particle_systems()[0]->imgui_controls();
+    ImGui::Begin("Stats");
+    ImGui::Text("FPS %.0f", 1.f / G.t.dt);
+    ImGui::Text("dt %.1f", 1000*G.t.dt);
+    ImGui::End();
 
     ui_render();
 }
@@ -87,14 +92,19 @@ int main(int argc, char **argv) {
         init();
 
         while (G.application_flags & APP_RUNNING) {
+            real_t current_time = static_cast<real_t>(get_time());
+            real_t dt = current_time - G.t.time;
+            while (dt < 1.f / 30.f) {
+                current_time = static_cast<real_t>(get_time());
+                dt = current_time - G.t.time;
+            }
+            G.t.time = current_time;
+            G.t.dt = dt;
+
             auto window = G.window.lock();
             if (window->should_close()) {
                 G.application_flags &= ~APP_RUNNING;
             }
-
-            const real_t current_time = static_cast<real_t>(get_time());
-            const real_t dt = current_time - G.t.time;
-            G.t.time = current_time;
 
             frame(dt);
 
