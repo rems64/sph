@@ -14,12 +14,13 @@ public:
 
     void resolve_collision(index_t i);
 
-    const void apply_gravity(real_t dt);
-    const void apply_pressure(real_t dt);
-    const void compute_densities();
-    const vec3 calculate_pressure(index_t i);
-    const real_t convert_density_to_pressure(real_t density);
-    const real_t convert_near_density_to_near_pressure(real_t density);
+    inline const void apply_gravity(real_t dt);
+    inline const void apply_pressure(real_t dt);
+    inline const void compute_densities(real_t dt);
+    inline const void integrate_and_collide(real_t dt);
+    inline const vec3 calculate_pressure(index_t i);
+    inline const real_t convert_density_to_pressure(real_t density);
+    inline const real_t convert_near_density_to_near_pressure(real_t density);
 
     // Grid related optimisations
     cell_t get_cell(const vec3 position) const;

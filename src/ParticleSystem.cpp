@@ -71,7 +71,7 @@ void ParticleSystem::build_cells() {
         const cellhash_t hash = hash_cell(cell);
         m_spatial_lookup[i] = std::make_pair(hash, i);
     }
-    std::sort(m_spatial_lookup.begin(), m_spatial_lookup.end());
+    std::stable_sort(m_spatial_lookup.begin(), m_spatial_lookup.end());
     index_t last_hash = 0;
     for (index_t i = 0; i < m_particles_count; i++) {
         const auto hash_index = m_spatial_lookup[i];
@@ -123,7 +123,7 @@ std::vector<index_t> ParticleSystem::get_neighbors_particles(const index_t parti
     return particle_indices;
 }
 
-ParticleSystem::ParticleSystem() : m_particles_count(500) {
+ParticleSystem::ParticleSystem() : m_particles_count(2000) {
     m_positions.resize(m_particles_count);
     m_velocities.resize(m_particles_count);
     m_densities.resize(m_particles_count);
@@ -146,9 +146,8 @@ const vec3 ParticleSystem::calculate_pressure(index_t i) {
     const real_t pressure = convert_density_to_pressure(density);
     const real_t near_pressure = convert_density_to_pressure(density);
 
-    const auto neighbors = get_neighbors_particles(i);
     bool missed = false;
-    for (const auto j : neighbors) {
+    for (const auto j : get_neighbors_particles(i)) {
         // for (index_t j = 0; j < m_particles_count; j++) {
         if (i == j)
             continue;
@@ -181,8 +180,10 @@ const real_t ParticleSystem::convert_near_density_to_near_pressure(real_t densit
     return density * m_near_pressure_multiplier;
 }
 
-const void ParticleSystem::compute_densities() {
+const void ParticleSystem::compute_densities(real_t dt_scaled) {
     // Compute densities
+    if (m_densities.size() != m_particles_count)
+        m_densities.resize(m_particles_count);
     for (index_t i = 0; i < m_particles_count; i++) {
         m_densities[i] = 0;
         const auto neighbors = get_neighbors_particles(i);
@@ -192,13 +193,16 @@ const void ParticleSystem::compute_densities() {
             real_t dst = glm::distance(m_predicted_positions[i], m_predicted_positions[j]);
             m_densities[i] += density_kernel(dst, m_smoothing_radius);
             m_near_densities[i] += near_density_kernel(dst, m_smoothing_radius);
+
+            m_velocities[i] += vec3(0, 0, 1) * m_gravity * dt_scaled;
+            m_predicted_positions[i] = m_positions[i] + m_velocities[i] * dt_scaled;
         }
     }
 }
 
 const void ParticleSystem::apply_gravity(real_t dt_scaled) {
+    return;
     // Apply gravity
-    m_densities.resize(m_particles_count);
     for (index_t i = 0; i < m_particles_count; i++) {
         m_velocities[i] += vec3(0, 0, 1) * m_gravity * dt_scaled;
         m_predicted_positions[i] = m_positions[i] + m_velocities[i] * dt_scaled;
@@ -214,6 +218,15 @@ const void ParticleSystem::apply_pressure(real_t dt_scaled) {
     }
 }
 
+const void ParticleSystem::integrate_and_collide(real_t dt_scaled) {
+    // Integrate and resolve collisions
+    for (index_t i = 0; i < m_particles_count; i++) {
+        m_positions[i] += m_velocities[i] * dt_scaled;
+
+        resolve_collision(i);
+    }
+}
+
 void ParticleSystem::update(real_t dt) {
     G.debug.missed_cells = 0;
     const real_t t = G.t.time;
@@ -222,15 +235,9 @@ void ParticleSystem::update(real_t dt) {
     std::cout << std::endl;
     TIME("apply_gravity", apply_gravity(dt_scaled))
     TIME("build_cells", build_cells())
-    TIME("compute_densities", compute_densities())
+    TIME("compute_densities", compute_densities(dt_scaled))
     TIME("apply_pressure", apply_pressure(dt_scaled))
-
-    // Integrate and resolve collisions
-    for (index_t i = 0; i < m_particles_count; i++) {
-        m_positions[i] += m_velocities[i] * dt_scaled;
-
-        resolve_collision(i);
-    }
+    TIME("integrate_and_collide", integrate_and_collide(dt_scaled))
 }
 
 void ParticleSystem::resolve_collision(index_t i) {
@@ -271,11 +278,13 @@ void ParticleSystem::imgui_controls() {
     ImGui::DragFloat("Gravity", &m_gravity, 0.1f, -20.f, 20.f);
 
     ImGui::DragFloat("Smoothing Radius", &m_smoothing_radius, 0.01f, 1.f);
-    ImGui::DragFloat("Target Density", &m_target_density, 0.001f, 10.f);
+    ImGui::DragFloat("Target Density", &m_target_density, 10.f, 10.f);
     ImGui::DragFloat("Pressure Multiplier", &m_pressure_multiplier, 0.1f, 0.001f, 10.f);
     ImGui::DragFloat("Near Pressure Multiplier", &m_near_pressure_multiplier, 0.1f, 0.001f, 10.f);
 
-    ImGui::Text("Missed cells : %u (%.1f%%)", G.debug.missed_cells, (float)G.debug.missed_cells/m_particles_count);
+    ImGui::Text("Missed cells : %u (%.1f%%)",
+                G.debug.missed_cells,
+                (float)G.debug.missed_cells / m_particles_count);
 
     ImGui::End();
 }
