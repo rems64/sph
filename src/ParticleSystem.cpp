@@ -18,8 +18,8 @@
         float _start_time = get_time(); \
         x; \
         float _delta_time = get_time() - _start_time; \
-        std::cout << "[time] " name << " " << 1000 * _delta_time << std::endl; \
     }
+// std::cout << "[time] " name << " " << 1000 * _delta_time << std::endl; \
 
 static real_t density_kernel(real_t dst, real_t radius) {
     if (dst < radius) {
@@ -232,7 +232,7 @@ void ParticleSystem::update(real_t dt) {
     const real_t t = G.t.time;
     const real_t dt_scaled = dt * m_simulation_speed;
 
-    std::cout << std::endl;
+    // std::cout << std::endl;
     TIME("apply_gravity", apply_gravity(dt_scaled))
     TIME("build_cells", build_cells())
     TIME("compute_densities", compute_densities(dt_scaled))

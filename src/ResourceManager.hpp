@@ -1,6 +1,7 @@
 #pragma once
 
 #include "BoundingBox.hpp"
+#include "Camera.hpp"
 #include "Material.hpp"
 #include "Mesh.hpp"
 #include "ParticleSystem.hpp"
@@ -19,6 +20,7 @@ public:
     handle<MeshRenderer> add(const ref<MeshRenderer> &resource);
     handle<ParticleRenderer> add(const ref<ParticleRenderer> &resource);
     handle<Window> add(const ref<Window> &resource);
+    handle<Camera> add(const ref<Camera> &resource);
     handle<Mesh> add(const ref<Mesh> &resource);
     handle<ParticleSystem> add(const ref<ParticleSystem> &resource);
     handle<Material> add(const ref<Material> &resource);
@@ -28,6 +30,8 @@ public:
     template <typename... Args> handle<Window> build_window(Args &&...args);
     template <typename... Args> handle<Renderer> build_renderer(Args &&...args);
     template <typename... Args> handle<ShaderProgram> build_shader(Args &&...args);
+    template <typename... Args> handle<Camera> build_camera(Args &&...args);
+    template <typename... Args> handle<PerspectiveCamera> build_perspective_camera(Args &&...args);
     template <typename... Args> handle<Mesh> build_mesh(Args &&...args);
     template <typename... Args> handle<ParticleMesh> build_particle_mesh(Args &&...args);
     template <typename... Args> handle<ParticleSystem> build_particle_system(Args &&...args);
@@ -38,6 +42,7 @@ public:
     inline const std::vector<ref<Window>> &windows() const { return m_windows; }
     inline const std::vector<ref<Renderer>> &renderers() const { return m_renderers; }
     inline const std::vector<ref<ShaderProgram>> &shaders() const { return m_shaders; }
+    inline const std::vector<ref<Camera>> &cameras() const { return m_cameras; }
     inline const std::vector<ref<Mesh>> &meshes() const { return m_meshes; }
     inline const std::vector<ref<ParticleSystem>> &particle_systems() const {
         return m_particle_systems;
@@ -51,6 +56,7 @@ private:
     std::vector<ref<Renderer>> m_renderers;
     std::vector<ref<ShaderProgram>> m_shaders;
     std::vector<ref<ParticleSystem>> m_particle_systems;
+    std::vector<ref<Camera>> m_cameras;
     std::vector<ref<Mesh>> m_meshes;
     std::vector<ref<Material>> m_materials;
     std::vector<ref<BoundingBox>> m_bounding_boxes;
@@ -75,6 +81,17 @@ template <typename... Args> handle<Renderer> ResourceManager::build_renderer(Arg
 template <typename... Args> handle<ShaderProgram> ResourceManager::build_shader(Args &&...args) {
     const auto resource = make_ref<ShaderProgram>(std::forward<Args>(args)...);
     m_shaders.push_back(resource);
+    return resource;
+}
+template <typename... Args> handle<Camera> ResourceManager::build_camera(Args &&...args) {
+    const auto resource = make_ref<Camera>(std::forward<Args>(args)...);
+    m_cameras.push_back(resource);
+    return resource;
+}
+template <typename... Args>
+handle<PerspectiveCamera> ResourceManager::build_perspective_camera(Args &&...args) {
+    const auto resource = make_ref<PerspectiveCamera>(std::forward<Args>(args)...);
+    m_cameras.push_back(resource);
     return resource;
 }
 template <typename... Args> handle<Mesh> ResourceManager::build_mesh(Args &&...args) {

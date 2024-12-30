@@ -28,6 +28,10 @@ handle<ShaderProgram> ResourceManager::add(const ref<ShaderProgram> &resource) {
     m_shaders.push_back(resource);
     return resource;
 }
+handle<Camera> ResourceManager::add(const ref<Camera> &resource) {
+    m_cameras.push_back(resource);
+    return resource;
+}
 handle<Mesh> ResourceManager::add(const ref<Mesh> &resource) {
     m_meshes.push_back(resource);
     return resource;

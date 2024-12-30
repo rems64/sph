@@ -88,10 +88,8 @@ void ParticleRenderer::render() {
 
     const auto shader = m_shader.lock();
     shader->use();
-    shader->set("viewMat", glm::lookAt(glm::vec3(-3., -3., 3.), glm::vec3(0), glm::vec3(0, 0, 1)));
-    shader->set(
-        "projMat",
-        glm::perspective(glm::radians(60.f), G.window.lock()->get_aspect_ratio(), 0.1f, 100.f));
+    shader->set("viewMat", G.camera.camera_transform.lock()->inverse_world_matrix());
+    shader->set("projMat", G.camera.camera.lock()->projection());
 
     for (const auto &item : m_items) {
         const auto world_matrix = glm::scale(mat4(1.0f), 1.f * vec3(1.f));
@@ -128,7 +126,7 @@ void ParticleRenderer::update_colors(const index_t index) {
         const real_t density_error = densities[i] - system->m_target_density;
         // const real_t normalized_speed = glm::length(speeds[i]) / max_speed;
         // m_colors[i] = glm::vec3(normalized_speed, .5f, .5f);
-        m_colors[i] = speed_map(density_error/100.f);
+        m_colors[i] = speed_map(density_error / 100.f);
     }
     glNamedBufferSubData(m_color_vbo, 0, sizeof(vec3) * m_colors.size(), m_colors.data());
 }
