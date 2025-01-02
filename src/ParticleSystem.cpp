@@ -59,7 +59,7 @@ static real_t near_density_derivative(real_t dst, real_t radius) {
 
 const cellhash_t ParticleSystem::hash_cell(cell_t cell) const {
     // TODO: use actual prime numbers
-    return (0x123456 * cell.x + 0x654232367 * cell.y + 0x734457 * cell.z) % m_particles_count;
+    return (39043 * cell.x + 36319 * cell.y + 40507 * cell.z) % m_particles_count;
 }
 
 void ParticleSystem::build_cells() {
