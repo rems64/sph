@@ -20,6 +20,8 @@ struct Timings {
 
 struct Debug {
     uint32_t missed_cells;
+    float density_error_offset = 0.f;
+    float density_color_range = 100.f;
 };
 
 struct CameraAggregate {
@@ -36,6 +38,12 @@ struct Input {
     struct Cursor cursor;
 };
 
+struct Simulation {
+    bool running = false;
+    bool show_bounds = false;
+    bool show_transform = false;
+};
+
 // Globals doesn't own any memory, except static strings
 struct Globals {
     const char *application_name = "OpenGL Boilerplate";
@@ -45,6 +53,7 @@ struct Globals {
     struct Debug debug;
     struct CameraAggregate camera;
     struct Input input;
+    struct Simulation simulation;
 
     handle<Window> window;
     handle<ResourceManager> resource_manager;

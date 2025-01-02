@@ -1,14 +1,17 @@
 #pragma once
 
+#include "mem.hpp"
 #include "typedefs.hpp"
 #include <vector>
 
 typedef ivec3 cell_t;
 typedef index_t cellhash_t;
 
+class Transform;
+
 class ParticleSystem {
 public:
-    ParticleSystem();
+    ParticleSystem(handle<Transform> transform);
 
     void update(real_t dt);
 
@@ -31,6 +34,11 @@ public:
     const std::vector<vec3> &velocities() const;
     const std::vector<real_t> &densities() const;
 
+    void set_container_speed(const vec3 &speed);
+    void set_container_delta_angle(const quat &delta_angle);
+
+    handle<Transform> transform() const;
+
     const float max_velocity();
 
     vec3 &extent_ref();
@@ -44,6 +52,7 @@ private:
 
 private:
     size_t m_particles_count;
+    handle<Transform> m_transform;
     std::vector<vec3> m_positions;
     std::vector<vec3> m_predicted_positions;
     std::vector<vec3> m_velocities;

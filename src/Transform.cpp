@@ -1,21 +1,26 @@
 #include "Transform.hpp"
+#include "ImGuizmo.h"
 #include "glm/ext/quaternion_common.hpp"
 #include "glm/gtc/quaternion.hpp"
+#include "glm/gtc/type_ptr.hpp"
 #include "typedefs.hpp"
+#include <iostream>
 
 #include <glm/gtc/matrix_transform.hpp>
 
 Transform::Transform()
-    : m_parent(nullptr), m_position{0.f}, m_scale{1.f}, m_rotation(1, 0, 0, 0){};
+    : m_parent(nullptr), m_position(0.f), m_scale(1.f), m_rotation(1, 0, 0, 0),
+      m_local_dirty(true), m_world_dirty(true), m_local_matrix(1.f), m_world_matrix(1.f){};
 
 Transform::Transform(Transform *parent)
-    : m_parent{parent}, m_position{0.f}, m_scale{1.f}, m_rotation(1, 0, 0, 0) {
+    : m_parent(parent), m_position(0.f), m_scale(1.f), m_rotation(1, 0, 0, 0), m_local_dirty(true),
+      m_world_dirty(true), m_local_matrix(1.f), m_world_matrix(1.f) {
     if (m_parent) {
         m_parent->add_child(this);
     }
 }
 
-const mat4 Transform::world_matrix() {
+mat4 Transform::world_matrix() {
     const auto local = local_matrix();
     if (m_world_dirty) {
         m_world_dirty = false;
@@ -28,13 +33,14 @@ const mat4 Transform::world_matrix() {
     return m_world_matrix;
 }
 
-const mat4 Transform::inverse_world_matrix() {
+mat4 Transform::inverse_world_matrix() {
     const auto world = world_matrix();
     return glm::inverse(world);
 }
 
 const mat4 Transform::local_matrix() {
     if (m_local_dirty) {
+        m_world_dirty = true;
         m_local_dirty = false;
         invalidate_children();
         mat4 translation = glm::translate(mat4(1.0), m_position);
@@ -45,10 +51,33 @@ const mat4 Transform::local_matrix() {
     return m_local_matrix;
 }
 
+real_t *Transform::local_matrix_ptr() {
+    local_matrix();
+    return glm::value_ptr(m_local_matrix);
+}
+
+void Transform::rebuild_from_matrix() {
+    vec3 translation;
+    vec3 rotation;
+    vec3 scale;
+    ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(m_local_matrix),
+                                          glm::value_ptr(translation),
+                                          glm::value_ptr(rotation),
+                                          glm::value_ptr(scale));
+    m_position = translation;
+    m_rotation = glm::quat(rotation);
+    m_scale = scale;
+}
+
+void Transform::invalidate() {
+    m_local_dirty = true;
+    m_world_dirty = true;
+}
+
 void Transform::invalidate_children() const {
     for (auto &child : m_children) {
         if (child) {
-            child->m_world_dirty = true;
+            child->invalidate();
         }
     }
 }
@@ -92,6 +121,10 @@ void Transform::rotate(const quat &rotation) {
 const vec3 Transform::position() const noexcept { return m_position; }
 const vec3 Transform::scale() const noexcept { return m_scale; }
 const quat Transform::rotation() const noexcept { return m_rotation; }
+
+vec3 &Transform::position_ref() { return m_position; }
+vec3 &Transform::scale_ref() { return m_scale; }
+quat &Transform::rotation_ref() { return m_rotation; }
 
 void Transform::set_parent(Transform *parent) {
     if (m_parent) {

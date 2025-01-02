@@ -1,8 +1,12 @@
 #include "ParticleSystem.hpp"
 #include "Globals.hpp"
+#include "Transform.hpp"
 #include "Window.hpp"
 #include "glm/common.hpp"
+#include "glm/ext/quaternion_transform.hpp"
 #include "glm/geometric.hpp"
+#include "glm/gtc/quaternion.hpp"
+#include "mem.hpp"
 #include "typedefs.hpp"
 #include <algorithm>
 #include <cmath>
@@ -123,7 +127,8 @@ std::vector<index_t> ParticleSystem::get_neighbors_particles(const index_t parti
     return particle_indices;
 }
 
-ParticleSystem::ParticleSystem() : m_particles_count(2000) {
+ParticleSystem::ParticleSystem(handle<Transform> transform)
+    : m_transform(transform), m_particles_count(2000) {
     m_positions.resize(m_particles_count);
     m_velocities.resize(m_particles_count);
     m_densities.resize(m_particles_count);
@@ -187,24 +192,33 @@ const void ParticleSystem::compute_densities(real_t dt_scaled) {
     for (index_t i = 0; i < m_particles_count; i++) {
         m_densities[i] = 0;
         const auto neighbors = get_neighbors_particles(i);
-        // Calculate density
-        // for (index_t j = 0; j < m_particles_count; j++) {
         for (const auto j : neighbors) {
             real_t dst = glm::distance(m_predicted_positions[i], m_predicted_positions[j]);
             m_densities[i] += density_kernel(dst, m_smoothing_radius);
             m_near_densities[i] += near_density_kernel(dst, m_smoothing_radius);
-
-            m_velocities[i] += vec3(0, 0, 1) * m_gravity * dt_scaled;
-            m_predicted_positions[i] = m_positions[i] + m_velocities[i] * dt_scaled;
         }
     }
 }
 
-const void ParticleSystem::apply_gravity(real_t dt_scaled) {
-    return;
-    // Apply gravity
+void ParticleSystem::set_container_speed(const vec3 &speed) {
+    const auto dt = G.t.dt;
+    const auto speed_local = glm::inverse(m_transform.lock()->rotation()) * speed;
     for (index_t i = 0; i < m_particles_count; i++) {
-        m_velocities[i] += vec3(0, 0, 1) * m_gravity * dt_scaled;
+        m_positions[i] -= speed_local * dt;
+    }
+}
+
+void ParticleSystem::set_container_delta_angle(const quat &delta_angle) {
+    const auto delta_angle_inv = glm::inverse(m_transform.lock()->rotation()) * glm::inverse(delta_angle) * m_transform.lock()->rotation();
+    for (index_t i = 0; i < m_particles_count; i++) {
+        m_positions[i] = delta_angle_inv * m_positions[i];
+    }
+};
+
+const void ParticleSystem::apply_gravity(real_t dt_scaled) {
+    vec3 gravity = glm::inverse(m_transform.lock()->rotation()) * vec3(0, 0, m_gravity);
+    for (index_t i = 0; i < m_particles_count; i++) {
+        m_velocities[i] += gravity * dt_scaled;
         m_predicted_positions[i] = m_positions[i] + m_velocities[i] * dt_scaled;
     }
 }
@@ -282,6 +296,9 @@ void ParticleSystem::imgui_controls() {
     ImGui::DragFloat("Pressure Multiplier", &m_pressure_multiplier, 0.1f, 0.001f, 10.f);
     ImGui::DragFloat("Near Pressure Multiplier", &m_near_pressure_multiplier, 0.1f, 0.001f, 10.f);
 
+    ImGui::DragFloat("Density Error Offset", &G.debug.density_error_offset);
+    ImGui::DragFloat("Density Color Range", &G.debug.density_color_range);
+
     ImGui::Text("Missed cells : %u (%.1f%%)",
                 G.debug.missed_cells,
                 (float)G.debug.missed_cells / m_particles_count);
@@ -293,3 +310,4 @@ const std::vector<vec3> &ParticleSystem::positions() const { return m_positions;
 const std::vector<vec3> &ParticleSystem::velocities() const { return m_velocities; }
 const std::vector<real_t> &ParticleSystem::densities() const { return m_densities; }
 vec3 &ParticleSystem::extent_ref() { return m_extents; }
+handle<Transform> ParticleSystem::transform() const { return m_transform; }

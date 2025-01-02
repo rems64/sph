@@ -92,7 +92,7 @@ void ParticleRenderer::render() {
     shader->set("projMat", G.camera.camera.lock()->projection());
 
     for (const auto &item : m_items) {
-        const auto world_matrix = glm::scale(mat4(1.0f), 1.f * vec3(1.f));
+        auto world_matrix = G.resource_manager.lock()->transforms()[1]->world_matrix();
         shader->set("particle_scale", 0.025f);
         shader->set("modelMat", world_matrix);
         shader->set("normMat", glm::mat3(glm::inverseTranspose(world_matrix)));
@@ -123,10 +123,10 @@ void ParticleRenderer::update_colors(const index_t index) {
     m_colors.resize(speeds.size());
     real_t max_speed = system->max_velocity();
     for (index_t i = 0; i < speeds.size(); i++) {
-        const real_t density_error = densities[i] - system->m_target_density;
+        const real_t density_error = densities[i] - system->m_target_density - G.debug.density_error_offset;
         // const real_t normalized_speed = glm::length(speeds[i]) / max_speed;
         // m_colors[i] = glm::vec3(normalized_speed, .5f, .5f);
-        m_colors[i] = speed_map(density_error / 100.f);
+        m_colors[i] = speed_map(density_error / G.debug.density_color_range);
     }
     glNamedBufferSubData(m_color_vbo, 0, sizeof(vec3) * m_colors.size(), m_colors.data());
 }

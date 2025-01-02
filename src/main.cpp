@@ -4,6 +4,7 @@
 #include "BoundingBox.hpp"
 #include "Camera.hpp"
 #include "Globals.hpp"
+#include "ImGuizmo.h"
 #include "Material.hpp"
 #include "Mesh.hpp"
 #include "Renderer.hpp"
@@ -11,16 +12,26 @@
 #include "ShaderProgram.hpp"
 #include "UI.hpp"
 #include "Window.hpp"
+#include "glm/common.hpp"
+#include "glm/ext/matrix_transform.hpp"
 #include "glm/ext/quaternion_common.hpp"
 #include "glm/ext/quaternion_transform.hpp"
 #include "glm/ext/quaternion_trigonometric.hpp"
+#include "glm/fwd.hpp"
 #include "glm/geometric.hpp"
 #include "glm/gtc/quaternion.hpp"
+#include "glm/gtc/type_ptr.hpp"
+#include "glm/matrix.hpp"
 #include "glm/trigonometric.hpp"
 #include "imgui.h"
 #include "typedefs.hpp"
 #include <GLFW/glfw3.h>
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/matrix_decompose.hpp>
 #include <iostream>
+
+const glm::mat4 yUpToZUp = glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1, 0, 0));
+const glm::mat4 zUpToYUp = glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(1, 0, 0));
 
 void build_scene() {
     auto resource_manager = G.resource_manager.lock();
@@ -34,7 +45,8 @@ void build_scene() {
 
     const handle<BoundingBox> bounding_box = resource_manager->build_boundingbox();
     const handle<Transform> transform = resource_manager->build_transform();
-    const handle<ParticleSystem> particle_system = resource_manager->build_particle_system();
+    const handle<ParticleSystem> particle_system = resource_manager->build_particle_system(
+        transform);
 
     camera_transform.lock()->translate(vec3(3.f, -3.f, 3.f));
     camera_transform.lock()->rotate(glm::angleAxis(glm::radians(45.f), vec3(1, 0, 0)));
@@ -73,7 +85,7 @@ void cursor_pos_callback(GLFWwindow *window, double xpos, double ypos) {
     glm::vec2 new_pos = glm::vec2(xpos, ypos);
     glm::vec2 delta = new_pos - G.input.cursor.position;
 
-    if (G.input.cursor.pressed) {
+    if (G.input.cursor.pressed && !ImGui::GetIO().WantCaptureMouse) {
         float dphi = -0.01f * delta.x;
         float dtheta = -0.01f * delta.y;
 
@@ -82,8 +94,8 @@ void cursor_pos_callback(GLFWwindow *window, double xpos, double ypos) {
         real_t &pitch = cam->target_pitch();
         real_t &yaw = cam->target_yaw();
 
-        pitch += dtheta;
-        yaw += dphi;
+        pitch = glm::clamp(pitch + dtheta, (float)-M_PI / 2 + 0.01f, (float)M_PI / 2 - 0.01f);
+        yaw = yaw + dphi;
     }
     G.input.cursor.position = new_pos;
 }
@@ -98,8 +110,6 @@ void scroll_callback(GLFWwindow *window, double xoffset, double yoffset) {
 }
 
 void mouse_button_callback(GLFWwindow *window, int button, int action, int mods) {
-    if (ImGui::GetIO().WantCaptureMouse)
-        return;
     switch (button) {
     case GLFW_MOUSE_BUTTON_LEFT:
         G.input.cursor.pressed = action == GLFW_PRESS;
@@ -107,6 +117,31 @@ void mouse_button_callback(GLFWwindow *window, int button, int action, int mods)
 
     default:
         break;
+    }
+}
+
+void key_callback(GLFWwindow *window, int key, int scancode, int action, int mods) {
+    if (action == GLFW_PRESS) {
+        switch (key) {
+        case GLFW_KEY_ESCAPE:
+            G.application_flags &= ~APP_RUNNING;
+            break;
+        case GLFW_KEY_SPACE:
+            G.simulation.running = !G.simulation.running;
+            break;
+        case GLFW_KEY_C:
+            G.resource_manager.lock()->particle_systems()[0]->transform().lock()->set_position(
+                vec3(0.f));
+            break;
+        case GLFW_KEY_T:
+            G.simulation.show_transform = !G.simulation.show_transform;
+            break;
+        case GLFW_KEY_B:
+            G.simulation.show_bounds = !G.simulation.show_bounds;
+            break;
+        default:
+            break;
+        }
     }
 }
 
@@ -119,6 +154,7 @@ void init() {
     glfwSetCursorPosCallback(G.window.lock()->raw_window(), cursor_pos_callback);
     glfwSetMouseButtonCallback(G.window.lock()->raw_window(), mouse_button_callback);
     glfwSetScrollCallback(G.window.lock()->raw_window(), scroll_callback);
+    glfwSetKeyCallback(G.window.lock()->raw_window(), key_callback);
 
     build_scene();
 
@@ -130,14 +166,32 @@ void close() { close_windowing(); }
 void update(real_t dt) {
     update_camera(dt);
     const auto resource_manager = G.resource_manager.lock();
-    const auto particle_systems = resource_manager->particle_systems();
-    for (const auto &particle_system : particle_systems) {
-        particle_system->update(dt);
+    if (G.simulation.running) {
+        const auto particle_systems = resource_manager->particle_systems();
+        for (const auto &particle_system : particle_systems) {
+            particle_system->update(dt);
+        }
     }
 }
 
+// void ToImGuizmo(float *dest, const mat4 &src) {
+//     for (auto row = 0; row < 4; row++) {
+//         for (auto col = 0; col < 4; col++)
+//             dest[row * 4 + col] = src[col * 4 + row];
+//     }
+// }
+
+// void FromImGuizmo(mat4 &dest, float *src) {
+//     for (auto row = 0; row < 4; row++) {
+//         for (auto col = 0; col < 4; col++)
+//             (&dest.m00_)[col * 4 + row] = src[row * 4 + col];
+//     }
+// }
+
 void render() {
     ui_new_frame();
+
+    ImGuiIO &io = ImGui::GetIO();
 
     const auto window = G.window.lock();
     auto resource_manager = G.resource_manager.lock();
@@ -147,6 +201,69 @@ void render() {
     glViewport(0, 0, window->width(), window->height());
     for (const auto &renderer : renderers) {
         renderer->render();
+    }
+
+    ImGuizmo::SetImGuiContext(ImGui::GetCurrentContext());
+
+    bool useWindow = false;
+    if (useWindow) {
+        ImGui::Begin("Gizmo", 0);
+        ImGuizmo::SetDrawlist();
+    }
+    float windowWidth = (float)ImGui::GetWindowWidth();
+    float windowHeight = (float)ImGui::GetWindowHeight();
+
+    if (!useWindow) {
+        ImGuizmo::SetRect(0, 0, io.DisplaySize.x, io.DisplaySize.y);
+    } else {
+        ImGuizmo::SetRect(
+            ImGui::GetWindowPos().x, ImGui::GetWindowPos().y, windowWidth, windowHeight);
+    }
+
+    ImGuizmo::BeginFrame();
+    auto system = G.resource_manager.lock()->particle_systems()[0];
+    auto transform = G.resource_manager.lock()->transforms()[1];
+    transform->set_scale(system->extent_ref());
+    auto local_matrix = transform->local_matrix();
+    // float *trans = transform->local_matrix_ptr();
+    const auto world_matrix = G.camera.camera_transform.lock()->inverse_world_matrix();
+    const auto projection_matrix = G.camera.camera.lock()->projection();
+    mat4 identity = mat4(1.f);
+    ImGuizmo::PushID(42);
+    auto &extent = system->extent_ref();
+    float bounds[] = {-0.5f, -0.5f, -0.5f, 0.5f, 0.5f, 0.5f};
+    if (ImGuizmo::Manipulate(
+            glm::value_ptr(world_matrix),
+            glm::value_ptr(projection_matrix),
+            (G.simulation.show_transform ? (ImGuizmo::TRANSLATE | ImGuizmo::ROTATE)
+                                         : (ImGuizmo::OPERATION)0u) |
+                (G.simulation.show_bounds ? ImGuizmo::BOUNDS : (ImGuizmo::OPERATION)0u),
+            ImGuizmo::MODE::WORLD,
+            glm::value_ptr(local_matrix),
+            nullptr,
+            nullptr,
+            G.simulation.show_bounds ? bounds : nullptr)) {
+        vec3 position;
+        vec3 rotation;
+        vec3 scale;
+        ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(local_matrix),
+                                              glm::value_ptr(position),
+                                              glm::value_ptr(rotation),
+                                              glm::value_ptr(scale));
+        const auto old_position = transform->position();
+        const auto old_rotation = transform->rotation();
+        const auto new_rotation = glm::quat(glm::radians(rotation));
+        transform->set_position(position);
+        transform->set_rotation(new_rotation);
+        extent = scale;
+        system->set_container_speed((position - old_position) / G.t.dt);
+        system->set_container_delta_angle(new_rotation * glm::inverse(old_rotation));
+    }
+    transform->set_scale(vec3(1.f));
+    ImGuizmo::PopID();
+
+    if (useWindow) {
+        ImGui::End();
     }
 
     G.resource_manager.lock()->particle_systems()[0]->imgui_controls();
