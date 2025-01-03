@@ -2,6 +2,7 @@
 
 #include "BoundingBox.hpp"
 #include "Camera.hpp"
+#include "Collider.hpp"
 #include "Material.hpp"
 #include "Mesh.hpp"
 #include "ParticleSystem.hpp"
@@ -26,6 +27,7 @@ public:
     handle<Material> add(const ref<Material> &resource);
     handle<BoundingBox> add(const ref<BoundingBox> &resource);
     handle<Transform> add(const ref<Transform> &resource);
+    handle<Collider> add(const ref<Collider> &resource);
 
     template <typename... Args> handle<Window> build_window(Args &&...args);
     template <typename... Args> handle<Renderer> build_renderer(Args &&...args);
@@ -38,6 +40,8 @@ public:
     template <typename... Args> handle<Material> build_material(Args &&...args);
     template <typename... Args> handle<BoundingBox> build_boundingbox(Args &&...args);
     template <typename... Args> handle<Transform> build_transform(Args &&...args);
+    template <typename... Args> handle<Collider> build_collider(Args &&...args);
+    template <typename... Args> handle<BoxCollider> build_box_collider(Args &&...args);
 
     inline const std::vector<ref<Window>> &windows() const { return m_windows; }
     inline const std::vector<ref<Renderer>> &renderers() const { return m_renderers; }
@@ -50,6 +54,7 @@ public:
     inline const std::vector<ref<Material>> &materials() const { return m_materials; }
     inline const std::vector<ref<BoundingBox>> &bounding_boxes() const { return m_bounding_boxes; }
     inline const std::vector<ref<Transform>> &transforms() const { return m_transforms; }
+    inline const std::vector<ref<Collider>> &colliders() const { return m_colliders; }
 
 private:
     std::vector<ref<Window>> m_windows;
@@ -61,6 +66,7 @@ private:
     std::vector<ref<Material>> m_materials;
     std::vector<ref<BoundingBox>> m_bounding_boxes;
     std::vector<ref<Transform>> m_transforms;
+    std::vector<ref<Collider>> m_colliders;
 
 private:
     ref<ParticleMesh> m_particle_mesh;
@@ -124,5 +130,16 @@ handle<BoundingBox> ResourceManager::build_boundingbox(Args &&...args) {
 template <typename... Args> handle<Transform> ResourceManager::build_transform(Args &&...args) {
     const auto resource = make_ref<Transform>(std::forward<Args>(args)...);
     m_transforms.push_back(resource);
+    return resource;
+}
+template <typename... Args> handle<Collider> ResourceManager::build_collider(Args &&...args) {
+    const auto resource = make_ref<Collider>(std::forward<Args>(args)...);
+    m_colliders.push_back(resource);
+    return resource;
+}
+template <typename... Args>
+handle<BoxCollider> ResourceManager::build_box_collider(Args &&...args) {
+    const auto resource = make_ref<BoxCollider>(std::forward<Args>(args)...);
+    m_colliders.push_back(resource);
     return resource;
 }

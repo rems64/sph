@@ -48,3 +48,7 @@ handle<BoundingBox> ResourceManager::add(const ref<BoundingBox> &resource) {
     m_bounding_boxes.push_back(resource);
     return resource;
 }
+handle<Collider> ResourceManager::add(const ref<Collider> &resource) {
+    m_colliders.push_back(resource);
+    return resource;
+}

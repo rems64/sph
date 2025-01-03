@@ -69,7 +69,7 @@ private:
     float m_collision_tangent_damping = 1.f;
     float m_gravity = -.0f;
     real_t m_smoothing_radius = 0.2f;
-    real_t m_target_density = 1000.f;
+    real_t m_target_density = 4.f;
     real_t m_pressure_multiplier = .1f;
     real_t m_near_pressure_multiplier = .1f;
 

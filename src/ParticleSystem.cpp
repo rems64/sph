@@ -1,5 +1,7 @@
 #include "ParticleSystem.hpp"
 #include "Globals.hpp"
+#include "Kernels.hpp"
+#include "ResourceManager.hpp"
 #include "Transform.hpp"
 #include "Window.hpp"
 #include "glm/common.hpp"
@@ -25,27 +27,16 @@
     }
 // std::cout << "[time] " name << " " << 1000 * _delta_time << std::endl; \
 
-static real_t density_kernel(real_t dst, real_t radius) {
-    if (dst < radius) {
-        float scale = 15 / (2 * M_PI * pow(radius, 5));
-        float v = radius - dst;
-        return v * v * scale;
-    }
-    return 0;
-}
+static real_t density_kernel(real_t dst, real_t radius) { return base_kernel(dst, radius); }
 
 static real_t density_derivative(real_t dst, real_t radius) {
-    if (dst <= radius) {
-        float scale = 15 / (pow(radius, 5) * M_PI);
-        float v = radius - dst;
-        return -v * scale;
-    }
-    return 0;
+    return base_kernel_derivative(dst, radius);
 }
 
 static real_t near_density_kernel(real_t dst, real_t radius) {
     if (dst < radius) {
-        float scale = 15 / (M_PI * pow(radius, 6));
+        // float scale = 15 / (M_PI * pow(radius, 6));
+        float scale = 2.f / (M_PI * M_PI * powf(radius, 4));
         float v = radius - dst;
         return v * v * v * scale;
     }
@@ -166,9 +157,10 @@ const vec3 ParticleSystem::calculate_pressure(index_t i) {
             dir = vec3(1, 0, 0);
         const real_t neighbor_density = m_densities[j];
         const real_t near_neighbor_density = m_densities[j];
-        const real_t shared_pressure = (pressure + convert_density_to_pressure(neighbor_density));
-        const real_t shared_near_pressure = (near_pressure + convert_near_density_to_near_pressure(
-                                                                 near_neighbor_density));
+        const real_t shared_pressure = 0.5f *
+                                       (pressure + convert_density_to_pressure(neighbor_density));
+        const real_t shared_near_pressure =
+            0.5f * (near_pressure + convert_near_density_to_near_pressure(near_neighbor_density));
         pressure_force += dir * density_derivative(dst, m_smoothing_radius) * shared_pressure /
                           neighbor_density;
         pressure_force += dir * near_density_derivative(dst, m_smoothing_radius) *
@@ -182,7 +174,7 @@ const real_t ParticleSystem::convert_density_to_pressure(real_t density) {
 }
 
 const real_t ParticleSystem::convert_near_density_to_near_pressure(real_t density) {
-    return density * m_near_pressure_multiplier;
+    return (density)*m_near_pressure_multiplier;
 }
 
 const void ParticleSystem::compute_densities(real_t dt_scaled) {
@@ -209,7 +201,8 @@ void ParticleSystem::set_container_speed(const vec3 &speed) {
 }
 
 void ParticleSystem::set_container_delta_angle(const quat &delta_angle) {
-    const auto delta_angle_inv = glm::inverse(m_transform.lock()->rotation()) * glm::inverse(delta_angle) * m_transform.lock()->rotation();
+    const auto delta_angle_inv = glm::inverse(m_transform.lock()->rotation()) *
+                                 glm::inverse(delta_angle) * m_transform.lock()->rotation();
     for (index_t i = 0; i < m_particles_count; i++) {
         m_positions[i] = delta_angle_inv * m_positions[i];
     }
@@ -234,8 +227,21 @@ const void ParticleSystem::apply_pressure(real_t dt_scaled) {
 
 const void ParticleSystem::integrate_and_collide(real_t dt_scaled) {
     // Integrate and resolve collisions
+    const auto colliders = G.resource_manager.lock()->colliders();
     for (index_t i = 0; i < m_particles_count; i++) {
+        m_velocities[i] = glm::clamp(m_velocities[i], -m_max_velocity, m_max_velocity);
         m_positions[i] += m_velocities[i] * dt_scaled;
+
+        for (const auto &collider : colliders) {
+            const vec3 world_position = m_transform.lock()->world_matrix() *
+                                        vec4(m_positions[i], 1);
+            const auto collision_result = collider->collide(world_position);
+            if (collision_result.collided) {
+                m_positions[i] += collision_result.mtv;
+                m_velocities[i] = m_collision_damping *
+                                  glm::reflect(m_velocities[i], collision_result.mtv);
+            }
+        }
 
         resolve_collision(i);
     }
@@ -292,9 +298,9 @@ void ParticleSystem::imgui_controls() {
     ImGui::DragFloat("Gravity", &m_gravity, 0.1f, -20.f, 20.f);
 
     ImGui::DragFloat("Smoothing Radius", &m_smoothing_radius, 0.01f, 1.f);
-    ImGui::DragFloat("Target Density", &m_target_density, 10.f, 10.f);
-    ImGui::DragFloat("Pressure Multiplier", &m_pressure_multiplier, 0.1f, 0.001f, 10.f);
-    ImGui::DragFloat("Near Pressure Multiplier", &m_near_pressure_multiplier, 0.1f, 0.001f, 10.f);
+    ImGui::DragFloat("Target Density", &m_target_density, 1.f, 0.f);
+    ImGui::DragFloat("Pressure Multiplier", &m_pressure_multiplier, 0.1f, 0.f, 10.f);
+    ImGui::DragFloat("Near Pressure Multiplier", &m_near_pressure_multiplier, 0.1f, 0.f, 10.f);
 
     ImGui::DragFloat("Density Error Offset", &G.debug.density_error_offset);
     ImGui::DragFloat("Density Color Range", &G.debug.density_color_range);

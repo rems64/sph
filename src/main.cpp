@@ -3,6 +3,7 @@
 
 #include "BoundingBox.hpp"
 #include "Camera.hpp"
+#include "Collider.hpp"
 #include "Globals.hpp"
 #include "ImGuizmo.h"
 #include "Material.hpp"
@@ -26,6 +27,7 @@
 #include "imgui.h"
 #include "typedefs.hpp"
 #include <GLFW/glfw3.h>
+#include <memory>
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/matrix_decompose.hpp>
 #include <iostream>
@@ -47,6 +49,9 @@ void build_scene() {
     const handle<Transform> transform = resource_manager->build_transform();
     const handle<ParticleSystem> particle_system = resource_manager->build_particle_system(
         transform);
+    const handle<Transform> collider_transform = resource_manager->build_transform();
+    const handle<BoxCollider> collider = resource_manager->build_box_collider(collider_transform,
+                                                                              vec3(1.f));
 
     camera_transform.lock()->translate(vec3(3.f, -3.f, 3.f));
     camera_transform.lock()->rotate(glm::angleAxis(glm::radians(45.f), vec3(1, 0, 0)));
@@ -229,7 +234,8 @@ void render() {
     const auto world_matrix = G.camera.camera_transform.lock()->inverse_world_matrix();
     const auto projection_matrix = G.camera.camera.lock()->projection();
     mat4 identity = mat4(1.f);
-    ImGuizmo::PushID(42);
+    index_t id = 42;
+    ImGuizmo::PushID(id++);
     auto &extent = system->extent_ref();
     float bounds[] = {-0.5f, -0.5f, -0.5f, 0.5f, 0.5f, 0.5f};
     if (ImGuizmo::Manipulate(
@@ -261,6 +267,42 @@ void render() {
     }
     transform->set_scale(vec3(1.f));
     ImGuizmo::PopID();
+    const auto colliders = resource_manager->colliders();
+    for (const auto &collider : colliders) {
+        const auto box_collider = std::dynamic_pointer_cast<BoxCollider>(collider);
+        if (!box_collider) {
+            continue;
+        }
+        auto transform = collider->transform().lock();
+        auto &extent = box_collider->extents();
+        std::cout << extent.x << std::endl;
+        transform->set_scale(extent);
+        auto local_matrix = transform->local_matrix();
+        float bounds[] = {-0.5f, -0.5f, -0.5f, 0.5f, 0.5f, 0.5f};
+        ImGuizmo::PushID(id++);
+        if (ImGuizmo::Manipulate(glm::value_ptr(world_matrix),
+                                 glm::value_ptr(projection_matrix),
+                                 ImGuizmo::TRANSLATE | ImGuizmo::ROTATE | ImGuizmo::BOUNDS,
+                                 ImGuizmo::MODE::WORLD,
+                                 glm::value_ptr(local_matrix),
+                                 nullptr,
+                                 nullptr,
+                                 bounds)) {
+            vec3 position;
+            vec3 rotation;
+            vec3 scale;
+            ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(local_matrix),
+                                                  glm::value_ptr(position),
+                                                  glm::value_ptr(rotation),
+                                                  glm::value_ptr(scale));
+            transform->set_position(position);
+            transform->set_rotation(glm::quat(glm::radians(rotation)));
+            transform->set_scale(vec3(1.f));
+            box_collider->extents() = scale;
+        }
+        transform->set_scale(vec3(1.f));
+        ImGuizmo::PopID();
+    }
 
     if (useWindow) {
         ImGui::End();
