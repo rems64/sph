@@ -21,7 +21,8 @@ struct Timings {
 struct Debug {
     uint32_t missed_cells;
     float density_error_offset = 0.f;
-    float density_color_range = 100.f;
+    float density_color_range = 1200.f;
+    uint32_t active_transforms = 0;
 };
 
 struct CameraAggregate {

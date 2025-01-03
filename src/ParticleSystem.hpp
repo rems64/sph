@@ -15,7 +15,7 @@ public:
 
     void update(real_t dt);
 
-    void resolve_collision(index_t i);
+    bool resolve_collision(index_t i);
 
     inline const void apply_gravity(real_t dt);
     inline const void apply_pressure(real_t dt);
@@ -67,10 +67,10 @@ private:
     vec3 m_extents = {1., 1., 1.};
     float m_collision_damping = .05f;
     float m_collision_tangent_damping = 1.f;
-    float m_gravity = -.0f;
+    float m_gravity = -4.0f;
     real_t m_smoothing_radius = 0.2f;
-    real_t m_target_density = 4.f;
-    real_t m_pressure_multiplier = .1f;
+    real_t m_target_density = 1200.f;
+    real_t m_pressure_multiplier = 4.f;
     real_t m_near_pressure_multiplier = .1f;
 
     real_t m_max_velocity = 10.f;

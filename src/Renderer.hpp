@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Mesh.hpp"
+#include "Transform.hpp"
 #include "mem.hpp"
 #include "typedefs.hpp"
 #include <utility>
@@ -19,7 +20,7 @@ public:
     virtual void render() = 0;
 };
 
-using MeshRendererItem = std::pair<handle<Material>, handle<Mesh>>;
+using MeshRendererItem = std::tuple<handle<Material>, handle<Mesh>, handle<Transform>>;
 
 class MeshRenderer : public Renderer {
 public:
@@ -29,7 +30,9 @@ public:
     void render() override;
     void compute_clusters();
 
-    void add(const handle<Material> &material, const handle<Mesh> &mesh);
+    void add(const handle<Material> &material,
+             const handle<Mesh> &mesh,
+             const handle<Transform> &transform);
 
 private:
     std::vector<MeshRendererItem> m_items;

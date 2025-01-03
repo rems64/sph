@@ -1,6 +1,7 @@
 #include "Collider.hpp"
 #include "Transform.hpp"
 #include "typedefs.hpp"
+#include <iostream>
 
 Collider::Collider(handle<Transform> transform) : m_transform(transform) {}
 
@@ -11,9 +12,15 @@ BoxCollider::BoxCollider(handle<Transform> transform, vec3 extents)
 
 vec3 &BoxCollider::extents() { return m_extents; }
 
-Collision BoxCollider::collide(const vec3 &point) const {
-
-    const vec3 point_localspace = m_transform.lock()->inverse_world_matrix() * vec4(point, 1);
+Collision BoxCollider::collide(const vec3 &point, const vec3 &direction_point) const {
+    vec4 tmp = m_transform.lock()->inverse_world_matrix() * vec4(point, 1);
+    vec3 point_localspace = vec3(tmp);
+    if (std::abs(tmp.w) > 0.0001f)
+        point_localspace /= tmp.w;
+    tmp = m_transform.lock()->inverse_world_matrix() * vec4(direction_point, 1);
+    vec3 direction_point_localspace = vec3(tmp);
+    if (std::abs(tmp.w) > 0.0001f)
+        direction_point_localspace /= tmp.w;
     const vec3 min = -glm::abs(m_extents) / 2.f;
     const vec3 max = glm::abs(m_extents) / 2.f;
 
@@ -27,30 +34,28 @@ Collision BoxCollider::collide(const vec3 &point) const {
     }
 
     // Calculate minimum translation vector
-    const real_t x_diff = std::min(std::abs(point_localspace.x - min.x),
-                                   std::abs(point_localspace.x - max.x));
-    const real_t y_diff = std::min(std::abs(point_localspace.y - min.y),
-                                   std::abs(point_localspace.y - max.y));
-    const real_t z_diff = std::min(std::abs(point_localspace.z - min.z),
-                                   std::abs(point_localspace.z - max.z));
+    real_t diffs[3] = {
+        std::min(std::abs(point_localspace.x - min.x), std::abs(point_localspace.x - max.x)),
+        std::min(std::abs(point_localspace.y - min.y), std::abs(point_localspace.y - max.y)),
+        std::min(std::abs(point_localspace.z - min.z), std::abs(point_localspace.z - max.z))};
+    vec3 vecs[3] = {vec3(1, 0, 0) * diffs[0] * glm::sign(direction_point_localspace.x) *
+                        glm::sign(point_localspace.x * direction_point_localspace.x),
+                    vec3(0, 1, 0) * diffs[1] * glm::sign(direction_point_localspace.y) *
+                        glm::sign(point_localspace.y * direction_point_localspace.y),
+                    vec3(0, 0, 1) * diffs[2] * glm::sign(direction_point_localspace.z) *
+                        glm::sign(point_localspace.z * direction_point_localspace.z)};
 
-    if (x_diff < y_diff && x_diff < z_diff) {
-        if (point_localspace.x < 0) {
-            return Collision{collided, vec3(-x_diff, 0, 0)};
-        } else {
-            return Collision{collided, vec3(x_diff, 0, 0)};
-        }
-    } else if (y_diff < x_diff && y_diff < z_diff) {
-        if (point_localspace.y < 0) {
-            return Collision{collided, vec3(0, -y_diff, 0)};
-        } else {
-            return Collision{collided, vec3(0, y_diff, 0)};
-        }
-    } else {
-        if (point_localspace.z < 0) {
-            return Collision{collided, vec3(0, 0, -z_diff)};
-        } else {
-            return Collision{collided, vec3(0, 0, z_diff)};
-        }
+    index_t best_axis[3] = {0, 1, 2};
+    // Order by penetration depth
+    if (diffs[best_axis[0]] > diffs[best_axis[1]]) {
+        std::swap(best_axis[0], best_axis[1]);
     }
+    if (diffs[best_axis[0]] > diffs[best_axis[2]]) {
+        std::swap(best_axis[0], best_axis[2]);
+    }
+    if (diffs[best_axis[1]] > diffs[best_axis[2]]) {
+        std::swap(best_axis[1], best_axis[2]);
+    }
+
+    return Collision{true, vecs[best_axis[0]], vecs[best_axis[1]]};
 }

@@ -14,6 +14,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <limits>
 #include <utility>
 #include <vector>
 
@@ -119,7 +120,7 @@ std::vector<index_t> ParticleSystem::get_neighbors_particles(const index_t parti
 }
 
 ParticleSystem::ParticleSystem(handle<Transform> transform)
-    : m_transform(transform), m_particles_count(2000) {
+    : m_transform(transform), m_particles_count(200) {
     m_positions.resize(m_particles_count);
     m_velocities.resize(m_particles_count);
     m_densities.resize(m_particles_count);
@@ -229,17 +230,21 @@ const void ParticleSystem::integrate_and_collide(real_t dt_scaled) {
     // Integrate and resolve collisions
     const auto colliders = G.resource_manager.lock()->colliders();
     for (index_t i = 0; i < m_particles_count; i++) {
+        vec3 previous = m_positions[i];
         m_velocities[i] = glm::clamp(m_velocities[i], -m_max_velocity, m_max_velocity);
         m_positions[i] += m_velocities[i] * dt_scaled;
+
+        resolve_collision(i);
 
         for (const auto &collider : colliders) {
             const vec3 world_position = m_transform.lock()->world_matrix() *
                                         vec4(m_positions[i], 1);
-            const auto collision_result = collider->collide(world_position);
+            const auto collision_result = collider->collide(world_position, previous);
             if (collision_result.collided) {
-                m_positions[i] += collision_result.mtv;
-                m_velocities[i] = m_collision_damping *
-                                  glm::reflect(m_velocities[i], collision_result.mtv);
+                const vec3 mtv = collision_result.mtv;
+                const vec3 mtv_local = glm::inverse(m_transform.lock()->rotation()) * mtv;
+                m_positions[i] += mtv_local;
+                m_velocities[i] = m_collision_damping * glm::reflect(m_velocities[i], mtv_local);
             }
         }
 
@@ -260,25 +265,30 @@ void ParticleSystem::update(real_t dt) {
     TIME("integrate_and_collide", integrate_and_collide(dt_scaled))
 }
 
-void ParticleSystem::resolve_collision(index_t i) {
+bool ParticleSystem::resolve_collision(index_t i) {
+    bool collide = false;
     if (std::abs(m_positions[i].x) > m_extents.x / 2.f) {
         m_positions[i].x = glm::sign(m_positions[i].x) * m_extents.x / 2.f;
         m_velocities[i].x *= -1.f * m_collision_damping;
         m_velocities[i].y *= m_collision_tangent_damping;
         m_velocities[i].z *= m_collision_tangent_damping;
+        collide = true;
     }
     if (std::abs(m_positions[i].y) > m_extents.y / 2.f) {
         m_positions[i].y = glm::sign(m_positions[i].y) * m_extents.y / 2.f;
         m_velocities[i].y *= -1.f * m_collision_damping;
         m_velocities[i].x *= m_collision_tangent_damping;
         m_velocities[i].z *= m_collision_tangent_damping;
+        collide = true;
     }
     if (std::abs(m_positions[i].z) > m_extents.z / 2.f) {
         m_positions[i].z = glm::sign(m_positions[i].z) * m_extents.z / 2.f;
         m_velocities[i].z *= -1.f * m_collision_damping;
         m_velocities[i].x *= m_collision_tangent_damping;
         m_velocities[i].y *= m_collision_tangent_damping;
+        collide = true;
     }
+    return collide;
 }
 
 const float ParticleSystem::max_velocity() { return m_max_velocity; }

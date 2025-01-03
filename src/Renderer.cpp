@@ -6,12 +6,15 @@
 #include "ParticleSystem.hpp"
 #include "ResourceManager.hpp"
 #include "ShaderProgram.hpp"
+#include "Transform.hpp"
 #include "glm/ext/matrix_clip_space.hpp"
 #include "glm/ext/matrix_transform.hpp"
 #include "glm/trigonometric.hpp"
+#include "mem.hpp"
 #include "typedefs.hpp"
 #include <iostream>
 #include <memory>
+#include <tuple>
 
 Renderer::Renderer() {}
 
@@ -23,18 +26,16 @@ void MeshRenderer::render() {
         compute_clusters();
     }
     for (const auto &cluster : m_clusters) {
-        const auto shader = cluster.begin()->first.lock()->shader().lock();
+        const auto shader = std::get<0>(cluster[0]).lock()->shader().lock();
         shader->use();
 
-        shader->set("viewMat",
-                    glm::lookAt(glm::vec3(-3., -3., 3.), glm::vec3(0), glm::vec3(0, 0, 1)));
-        shader->set("projMat",
-                    glm::perspective(
-                        glm::radians(60.f), G.window.lock()->get_aspect_ratio(), 0.1f, 100.f));
+        shader->set("viewMat", G.camera.camera_transform.lock()->inverse_world_matrix());
+        shader->set("projMat", G.camera.camera.lock()->projection());
         for (const auto &item : cluster) {
-            const auto material = item.first.lock();
-            const auto mesh = item.second.lock();
-            const auto world_matrix = glm::mat4(1.f);
+            const auto material = std::get<0>(item).lock();
+            const auto mesh = std::get<1>(item).lock();
+            const auto transform = std::get<2>(item).lock();
+            const auto world_matrix = transform->world_matrix();
 
             shader->set("material.albedo", material->albedo());
             shader->set("modelMat", world_matrix);
@@ -49,7 +50,7 @@ void MeshRenderer::compute_clusters() {
     std::vector<handle<ShaderProgram>> shaders;
     m_clusters.clear();
     for (const auto &item : m_items) {
-        const auto shader = item.first.lock()->shader();
+        const auto shader = std::get<0>(item).lock()->shader();
         index_t i;
         for (i = 0; i < shaders.size(); i++) {
             // if (!shaders[i].owner_before(shader) && !shader.owner_before(shaders[i])) {
@@ -66,8 +67,10 @@ void MeshRenderer::compute_clusters() {
     m_clusters_dirty = false;
 }
 
-void MeshRenderer::add(const handle<Material> &material, const handle<Mesh> &mesh) {
-    m_items.push_back(std::make_pair(material, mesh));
+void MeshRenderer::add(const handle<Material> &material,
+                       const handle<Mesh> &mesh,
+                       const handle<Transform> &transform) {
+    m_items.push_back(std::make_tuple(material, mesh, transform));
     m_clusters_dirty = true;
 }
 
@@ -123,7 +126,8 @@ void ParticleRenderer::update_colors(const index_t index) {
     m_colors.resize(speeds.size());
     real_t max_speed = system->max_velocity();
     for (index_t i = 0; i < speeds.size(); i++) {
-        const real_t density_error = densities[i] - system->m_target_density - G.debug.density_error_offset;
+        const real_t density_error = densities[i] - system->m_target_density -
+                                     G.debug.density_error_offset;
         // const real_t normalized_speed = glm::length(speeds[i]) / max_speed;
         // m_colors[i] = glm::vec3(normalized_speed, .5f, .5f);
         m_colors[i] = speed_map(density_error / G.debug.density_color_range);

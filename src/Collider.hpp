@@ -8,6 +8,7 @@ class Transform;
 struct Collision {
     bool collided;
     vec3 mtv;
+    vec3 nmbsgtv;  // Not minimal but still good translation vector
 };
 
 class Collider {
@@ -17,7 +18,7 @@ public:
 
     handle<Transform> transform() const;
 
-    virtual Collision collide(const vec3 &point) const = 0;
+    virtual Collision collide(const vec3 &point, const vec3 &direction_point) const = 0;
 
 protected:
     handle<Transform> m_transform;
@@ -29,7 +30,7 @@ public:
 
     vec3 &extents();
 
-    Collision collide(const vec3 &point) const override;
+    Collision collide(const vec3 &point, const vec3 &direction_point) const override;
 
 private:
     vec3 m_extents;

@@ -49,9 +49,24 @@ void build_scene() {
     const handle<Transform> transform = resource_manager->build_transform();
     const handle<ParticleSystem> particle_system = resource_manager->build_particle_system(
         transform);
-    const handle<Transform> collider_transform = resource_manager->build_transform();
-    const handle<BoxCollider> collider = resource_manager->build_box_collider(collider_transform,
-                                                                              vec3(1.f));
+    const handle<MeshRenderer> renderer = resource_manager->add(make_ref<MeshRenderer>());
+
+    for (index_t i = 0; i < 2; i++) {
+        const handle<Transform> collider_transform = resource_manager->build_transform();
+        const handle<BoxCollider> collider = resource_manager->build_box_collider(
+            collider_transform, vec3(1.f));
+        const handle<Mesh> mesh = resource_manager->build_mesh();
+        const handle<Material> material = resource_manager->build_material(shader,
+                                                                           vec3(1.f, 1.f, 0.f));
+        mesh.lock()->addBox(1.f, 1.f, 1.f);
+        mesh.lock()->init();
+        renderer.lock()->add(material, mesh, collider_transform);
+    }
+
+    resource_manager->transforms()[2]->translate(vec3(1.5f, 0.f, 0.f));
+    resource_manager->transforms()[3]->translate(vec3(-1.5f, 0.f, 0.f));
+    resource_manager->transforms()[2]->scale(vec3(1.1f));
+    resource_manager->transforms()[3]->scale(vec3(1.1f));
 
     camera_transform.lock()->translate(vec3(3.f, -3.f, 3.f));
     camera_transform.lock()->rotate(glm::angleAxis(glm::radians(45.f), vec3(1, 0, 0)));
@@ -145,6 +160,10 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
             G.simulation.show_bounds = !G.simulation.show_bounds;
             break;
         default:
+            if (key <= GLFW_KEY_9 && key >= GLFW_KEY_1) {
+                G.debug.active_transforms ^= 1 << (key - GLFW_KEY_1);
+            } else if (key == GLFW_KEY_0)
+                G.debug.active_transforms = 0;
             break;
         }
     }
@@ -268,26 +287,29 @@ void render() {
     transform->set_scale(vec3(1.f));
     ImGuizmo::PopID();
     const auto colliders = resource_manager->colliders();
+    index_t i = 0;
     for (const auto &collider : colliders) {
+        if (!(G.debug.active_transforms & (1 << i++))) {
+            continue;
+        }
         const auto box_collider = std::dynamic_pointer_cast<BoxCollider>(collider);
         if (!box_collider) {
             continue;
         }
         auto transform = collider->transform().lock();
-        auto &extent = box_collider->extents();
-        std::cout << extent.x << std::endl;
-        transform->set_scale(extent);
+        // auto &extent = box_collider->extents();
+        // transform->set_scale(extent);
         auto local_matrix = transform->local_matrix();
         float bounds[] = {-0.5f, -0.5f, -0.5f, 0.5f, 0.5f, 0.5f};
         ImGuizmo::PushID(id++);
         if (ImGuizmo::Manipulate(glm::value_ptr(world_matrix),
                                  glm::value_ptr(projection_matrix),
-                                 ImGuizmo::TRANSLATE | ImGuizmo::ROTATE | ImGuizmo::BOUNDS,
+                                 ImGuizmo::TRANSLATE | ImGuizmo::ROTATE | ImGuizmo::SCALE,
                                  ImGuizmo::MODE::WORLD,
                                  glm::value_ptr(local_matrix),
                                  nullptr,
                                  nullptr,
-                                 bounds)) {
+                                 nullptr)) {
             vec3 position;
             vec3 rotation;
             vec3 scale;
@@ -297,10 +319,10 @@ void render() {
                                                   glm::value_ptr(scale));
             transform->set_position(position);
             transform->set_rotation(glm::quat(glm::radians(rotation)));
-            transform->set_scale(vec3(1.f));
-            box_collider->extents() = scale;
+            transform->set_scale(scale);
+            // box_collider->extents() = scale;
         }
-        transform->set_scale(vec3(1.f));
+        // transform->set_scale(vec3(1.f));
         ImGuizmo::PopID();
     }
 
