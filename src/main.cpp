@@ -144,7 +144,7 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
     if (action == GLFW_PRESS) {
         switch (key) {
         case GLFW_KEY_ESCAPE:
-            G.application_flags &= ~APP_RUNNING;
+            // G.application_flags &= ~APP_RUNNING;
             break;
         case GLFW_KEY_SPACE:
             G.simulation.running = !G.simulation.running;
