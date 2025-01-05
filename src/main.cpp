@@ -27,6 +27,7 @@
 #include "imgui.h"
 #include "typedefs.hpp"
 #include <GLFW/glfw3.h>
+#include <limits>
 #include <memory>
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/matrix_decompose.hpp>
@@ -148,6 +149,19 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
             break;
         case GLFW_KEY_SPACE:
             G.simulation.running = !G.simulation.running;
+            if (G.simulation.running)
+                G.simulation.stop_at_step =
+                    std::numeric_limits<typeof(G.simulation.stop_at_step)>::max();
+            else
+                G.simulation.stop_at_step = G.simulation.step;
+            break;
+        case GLFW_KEY_RIGHT:
+            if (!G.simulation.running)
+                G.simulation.stop_at_step++;
+            break;
+        case GLFW_KEY_LEFT:
+            if (!G.simulation.running)
+                G.simulation.stop_at_step--;
             break;
         case GLFW_KEY_C:
             G.resource_manager.lock()->particle_systems()[0]->transform().lock()->set_position(
@@ -190,7 +204,8 @@ void close() { close_windowing(); }
 void update(real_t dt) {
     update_camera(dt);
     const auto resource_manager = G.resource_manager.lock();
-    if (G.simulation.running) {
+    if (G.simulation.step < G.simulation.stop_at_step) {
+        G.simulation.step++;
         const auto particle_systems = resource_manager->particle_systems();
         for (const auto &particle_system : particle_systems) {
             particle_system->update(dt);
