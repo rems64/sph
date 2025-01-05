@@ -162,7 +162,7 @@ std::vector<index_t> ParticleSystem::get_neighbors_particles(const index_t parti
 }
 
 ParticleSystem::ParticleSystem(handle<Transform> transform)
-    : m_transform(transform), m_particles_count(200) {
+    : m_transform(transform), m_particles_count(200), m_hist_active_cells_count(100) {
     m_positions.resize(m_particles_count);
     m_velocities.resize(m_particles_count);
     m_densities.resize(m_particles_count);
@@ -256,9 +256,17 @@ const void ParticleSystem::apply_gravity(cell_t cell, real_t dt_scaled) {
         if (is_updated(i))
             continue;
         set_updated(i);
-        G.debug.particles_updated++;
-        // for (index_t i = 0; i < m_particles_count; i++) {
         m_velocities[i] += gravity * dt_scaled;
+    }
+}
+
+const void ParticleSystem::compute_predicted_position(cell_t cell, real_t dt_scaled) {
+    vec3 gravity = glm::inverse(m_transform.lock()->rotation()) * vec3(0, 0, m_gravity);
+    const auto particles_indices = get_particles_in_cell(cell);
+    for (const auto i : particles_indices) {
+        if (is_updated(i))
+            continue;
+        set_updated(i);
         m_predicted_positions[i] = m_positions[i] + m_velocities[i] * dt_scaled;
     }
 }
@@ -286,6 +294,7 @@ const void ParticleSystem::integrate_and_collide(cell_t cell, real_t dt_scaled) 
         if (is_updated(i))
             continue;
         set_updated(i);
+        G.debug.particles_updated++;
         vec3 previous = m_positions[i];
         m_velocities[i] = glm::clamp(m_velocities[i], -m_max_velocity, m_max_velocity);
         m_positions[i] += m_velocities[i] * dt_scaled;
@@ -343,6 +352,7 @@ void ParticleSystem::update(real_t dt) {
         integrate_and_collide(cell, dt_scaled);
     }
 
+    m_hist_active_cells_count.push_back(m_active_cells.size());
 }
 
 bool ParticleSystem::resolve_collision(index_t i) {
@@ -404,6 +414,12 @@ void ParticleSystem::imgui_controls() {
 
     ImGui::Text("Particles updated : %u", G.debug.particles_updated);
     ImGui::Text("Active cells count : %lu", m_active_cells.size());
+    // ImGui::PlotHistogram("Active cells count", m_hist_active_cells_count.data(),
+    // m_hist_active_cells_count.size());
+    ImGui::PlotLines("Active cells count",
+                     m_hist_active_cells_count.ptr(),
+                     m_hist_active_cells_count.count(),
+                     m_hist_active_cells_count.offset());
 
     ImGui::End();
 }

@@ -2,6 +2,7 @@
 
 #include <unordered_map>
 #define GLM_ENABLE_EXPERIMENTAL
+#include "RingBuffer.hpp"
 #include "mem.hpp"
 #include "typedefs.hpp"
 #include <glm/gtx/hash.hpp>
@@ -24,6 +25,7 @@ public:
 
     const void update_cell(cell_t cell);
     inline const void apply_gravity(cell_t cell, real_t dt);
+    inline const void compute_predicted_position(cell_t cell, real_t dt);
     inline const void apply_pressure(cell_t cell, real_t dt);
     inline const void compute_densities(cell_t cell, real_t dt);
     inline const void integrate_and_collide(cell_t cell, real_t dt);
@@ -90,4 +92,6 @@ private:
     real_t m_max_velocity = 10.f;
 
     real_t m_simulation_speed = 1.f;
+
+    RingBuffer<float> m_hist_active_cells_count;
 };
