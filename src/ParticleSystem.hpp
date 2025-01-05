@@ -1,7 +1,12 @@
 #pragma once
 
+#include <unordered_map>
+#define GLM_ENABLE_EXPERIMENTAL
 #include "mem.hpp"
 #include "typedefs.hpp"
+#include <glm/gtx/hash.hpp>
+#include <thread>
+#include <unordered_set>
 #include <vector>
 
 typedef ivec3 cell_t;
@@ -17,10 +22,11 @@ public:
 
     bool resolve_collision(index_t i);
 
-    inline const void apply_gravity(real_t dt);
-    inline const void apply_pressure(real_t dt);
-    inline const void compute_densities(real_t dt);
-    inline const void integrate_and_collide(real_t dt);
+    const void update_cell(cell_t cell);
+    inline const void apply_gravity(cell_t cell, real_t dt);
+    inline const void apply_pressure(cell_t cell, real_t dt);
+    inline const void compute_densities(cell_t cell, real_t dt);
+    inline const void integrate_and_collide(cell_t cell, real_t dt);
     inline const vec3 calculate_pressure(index_t i);
     inline const real_t convert_density_to_pressure(real_t density);
     inline const real_t convert_near_density_to_near_pressure(real_t density);
@@ -49,6 +55,10 @@ public:
 
 private:
     const cellhash_t hash_cell(cell_t cell) const;
+    const std::vector<index_t> get_particles_in_cell(cell_t cell) const;
+    const void clear_updated();
+    const void set_updated(index_t index);
+    const bool is_updated(index_t index);
 
 private:
     size_t m_particles_count;
@@ -58,10 +68,14 @@ private:
     std::vector<vec3> m_velocities;
     std::vector<real_t> m_near_densities;
     std::vector<real_t> m_densities;
+    std::vector<uint32_t> m_updated_particles;
 
     // Found in a video from Sebastian Lague
     std::vector<std::pair<cellhash_t, index_t>> m_spatial_lookup;
     std::vector<index_t> m_cell_start_index;
+
+    std::unordered_set<cell_t> m_active_cells;
+    std::vector<std::thread> m_threads;
 
 private:
     vec3 m_extents = {1., 1., 1.};

@@ -13,12 +13,15 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <functional>
 #include <iostream>
 #include <limits>
 #include <utility>
 #include <vector>
 
 #include "imgui.h"
+
+#include <threads.h>
 
 #define TIME(name, x) \
     { \
@@ -54,16 +57,42 @@ static real_t near_density_derivative(real_t dst, real_t radius) {
 }
 
 const cellhash_t ParticleSystem::hash_cell(cell_t cell) const {
-    // TODO: use actual prime numbers
-    return (39043 * cell.x + 36319 * cell.y + 40507 * cell.z) % m_particles_count;
+    const auto hash = std::hash<cell_t>()(cell);
+    return hash % m_particles_count;
+    // return (std::hash<size_t>()(cell.x) ^ std::hash<size_t>()(cell.y) ^
+    // std::hash<size_t>()(cell.z)) % m_particles_count;
+}
+
+const void ParticleSystem::clear_updated() {
+    const size_t updated_particles_size = std::ceil((float)m_particles_count / 32.f);
+    m_updated_particles.resize(updated_particles_size);
+    std::fill_n(m_updated_particles.begin(), updated_particles_size, 0);
+    // m_updated_particles.resize(m_particles_count);
+    // for (index_t i = 0; i < m_particles_count; i++)
+    //     m_updated_particles[i] = false;
+}
+
+const void ParticleSystem::set_updated(index_t index) {
+    const auto info = div(index, 32);
+    // To prevent unecessary substraction, we store each integer reversed
+    m_updated_particles[info.quot] |= (1u << info.rem);
+    // m_updated_particles[index] = true;
+}
+
+const bool ParticleSystem::is_updated(index_t index) {
+    const auto info = div(index, 32);
+    return m_updated_particles[info.quot] & (1u << info.rem);
+    // return m_updated_particles[index];
 }
 
 void ParticleSystem::build_cells() {
+    m_active_cells.clear();
     m_spatial_lookup.resize(m_particles_count);
     m_cell_start_index.resize(m_particles_count);
     for (index_t i = 0; i < m_particles_count; i++) {
-        const auto position = m_predicted_positions[i];
+        const auto position = m_positions[i];
         const cell_t cell = get_cell(position);
+        m_active_cells.insert(cell);
         const cellhash_t hash = hash_cell(cell);
         m_spatial_lookup[i] = std::make_pair(hash, i);
     }
@@ -83,6 +112,20 @@ cell_t ParticleSystem::get_cell(const vec3 position) const {
     const auto y = std::floor(position.y / grid_size);
     const auto z = std::floor(position.z / grid_size);
     return cell_t(x, y, z);
+}
+
+const std::vector<index_t> ParticleSystem::get_particles_in_cell(cell_t cell) const {
+    std::vector<index_t> particle_indices = {};
+    const auto hash = hash_cell(cell);
+    index_t index = m_cell_start_index[hash];
+    while (index < m_particles_count) {
+        const auto hash_index = m_spatial_lookup[index];
+        if (hash_index.first != hash)
+            break;
+        particle_indices.push_back(hash_index.second);
+        index++;
+    }
+    return particle_indices;
 }
 
 std::vector<index_t> ParticleSystem::get_neighbors_particles(const index_t particle_index) const {
@@ -106,14 +149,9 @@ std::vector<index_t> ParticleSystem::get_neighbors_particles(const index_t parti
         cell_t(cell.x - 1, cell.y - 1, cell.z - 1),
     };
     for (const auto cell : neighbor_cells) {
-        const auto hash = hash_cell(cell);
-        index_t index = m_cell_start_index[hash];
-        while (index < m_particles_count) {
-            const auto hash_index = m_spatial_lookup[index];
-            if (hash_index.first != hash)
-                break;
-            particle_indices.push_back(hash_index.second);
-            index++;
+        const auto cell_particles = get_particles_in_cell(cell);
+        for (const auto particle_index : cell_particles) {
+            particle_indices.push_back(particle_index);
         }
     }
     return particle_indices;
@@ -141,14 +179,11 @@ const vec3 ParticleSystem::calculate_pressure(index_t i) {
     const real_t pressure = convert_density_to_pressure(density);
     const real_t near_pressure = convert_density_to_pressure(density);
 
-    bool missed = false;
     for (const auto j : get_neighbors_particles(i)) {
         // for (index_t j = 0; j < m_particles_count; j++) {
         if (i == j)
             continue;
         real_t dst = glm::distance(sample_point, m_predicted_positions[j]);
-        if (dst > (sqrt(3.) * m_smoothing_radius) && !missed && (missed |= true))
-            G.debug.missed_cells++;
         vec3 dir;
         if (dst > 0.00001f)
             dir = (m_predicted_positions[j] - sample_point) / dst;
@@ -176,11 +211,13 @@ const real_t ParticleSystem::convert_near_density_to_near_pressure(real_t densit
     return (density)*m_near_pressure_multiplier;
 }
 
-const void ParticleSystem::compute_densities(real_t dt_scaled) {
+const void ParticleSystem::compute_densities(cell_t cell, real_t dt_scaled) {
     // Compute densities
     if (m_densities.size() != m_particles_count)
         m_densities.resize(m_particles_count);
-    for (index_t i = 0; i < m_particles_count; i++) {
+    const auto particles_indices = get_particles_in_cell(cell);
+    for (const auto i : particles_indices) {
+        // for (index_t i = 0; i < m_particles_count; i++) {
         m_densities[i] = 0;
         const auto neighbors = get_neighbors_particles(i);
         for (const auto j : neighbors) {
@@ -207,27 +244,43 @@ void ParticleSystem::set_container_delta_angle(const quat &delta_angle) {
     }
 };
 
-const void ParticleSystem::apply_gravity(real_t dt_scaled) {
+const void ParticleSystem::apply_gravity(cell_t cell, real_t dt_scaled) {
     vec3 gravity = glm::inverse(m_transform.lock()->rotation()) * vec3(0, 0, m_gravity);
-    for (index_t i = 0; i < m_particles_count; i++) {
+    const auto particles_indices = get_particles_in_cell(cell);
+    for (const auto i : particles_indices) {
+        if (is_updated(i))
+            continue;
+        set_updated(i);
+        G.debug.particles_updated++;
+        // for (index_t i = 0; i < m_particles_count; i++) {
         m_velocities[i] += gravity * dt_scaled;
         m_predicted_positions[i] = m_positions[i] + m_velocities[i] * dt_scaled;
     }
 }
 
-const void ParticleSystem::apply_pressure(real_t dt_scaled) {
+const void ParticleSystem::apply_pressure(cell_t cell, real_t dt_scaled) {
     // Apply pressure
-    for (index_t i = 0; i < m_particles_count; i++) {
+    // for (index_t i = 0; i < m_particles_count; i++) {
+    const auto particles_indices = get_particles_in_cell(cell);
+    for (const auto i : particles_indices) {
+        if (is_updated(i))
+            continue;
+        set_updated(i);
         vec3 pressure_force = calculate_pressure(i);
         vec3 pressure_acceleration = pressure_force / m_densities[i];
         m_velocities[i] += pressure_acceleration * dt_scaled;
     }
 }
 
-const void ParticleSystem::integrate_and_collide(real_t dt_scaled) {
+const void ParticleSystem::integrate_and_collide(cell_t cell, real_t dt_scaled) {
     // Integrate and resolve collisions
     const auto colliders = G.resource_manager.lock()->colliders();
-    for (index_t i = 0; i < m_particles_count; i++) {
+    // for (index_t i = 0; i < m_particles_count; i++) {
+    const auto particles_indices = get_particles_in_cell(cell);
+    for (const auto i : particles_indices) {
+        if (is_updated(i))
+            continue;
+        set_updated(i);
         vec3 previous = m_positions[i];
         m_velocities[i] = glm::clamp(m_velocities[i], -m_max_velocity, m_max_velocity);
         m_positions[i] += m_velocities[i] * dt_scaled;
@@ -256,11 +309,26 @@ void ParticleSystem::update(real_t dt) {
     const real_t dt_scaled = dt * m_simulation_speed;
 
     // std::cout << std::endl;
-    TIME("apply_gravity", apply_gravity(dt_scaled))
-    TIME("build_cells", build_cells())
-    TIME("compute_densities", compute_densities(dt_scaled))
-    TIME("apply_pressure", apply_pressure(dt_scaled))
-    TIME("integrate_and_collide", integrate_and_collide(dt_scaled))
+    build_cells();
+
+    G.debug.particles_updated = 0;
+
+    clear_updated();
+    for (const auto cell : m_active_cells) {
+        apply_gravity(cell, dt_scaled);
+    }
+    clear_updated();
+    for (const auto cell : m_active_cells) {
+        compute_densities(cell, dt_scaled);
+    }
+    clear_updated();
+    for (const auto cell : m_active_cells) {
+        apply_pressure(cell, dt_scaled);
+    }
+    clear_updated();
+    for (const auto cell : m_active_cells) {
+        integrate_and_collide(cell, dt_scaled);
+    }
 }
 
 bool ParticleSystem::resolve_collision(index_t i) {
@@ -313,9 +381,15 @@ void ParticleSystem::imgui_controls() {
     ImGui::DragFloat("Density Error Offset", &G.debug.density_error_offset);
     ImGui::DragFloat("Density Color Range", &G.debug.density_color_range);
 
+    ImGui::Separator();
+
+    ImGui::Text("Particles count : %lu", m_particles_count);
     ImGui::Text("Missed cells : %u (%.1f%%)",
                 G.debug.missed_cells,
-                (float)G.debug.missed_cells / m_particles_count);
+                100.f * (float)G.debug.missed_cells / m_particles_count);
+
+    ImGui::Text("Particles updated : %u", G.debug.particles_updated);
+    ImGui::Text("Active cells count : %lu", m_active_cells.size());
 
     ImGui::End();
 }

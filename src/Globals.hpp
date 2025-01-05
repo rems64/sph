@@ -23,6 +23,7 @@ struct Debug {
     float density_error_offset = 0.f;
     float density_color_range = 1200.f;
     uint32_t active_transforms = 0;
+    uint32_t particles_updated = 0;
 };
 
 struct CameraAggregate {
