@@ -318,22 +318,31 @@ void ParticleSystem::update(real_t dt) {
 
     G.debug.particles_updated = 0;
 
+    // clear_updated();
+    // for (const auto cell : m_active_cells) {
+    //     apply_gravity(cell, dt_scaled);
+    // }
+
     clear_updated();
     for (const auto cell : m_active_cells) {
-        apply_gravity(cell, dt_scaled);
+        compute_predicted_position(cell, dt_scaled);
     }
+
     clear_updated();
     for (const auto cell : m_active_cells) {
         compute_densities(cell, dt_scaled);
     }
+
     clear_updated();
     for (const auto cell : m_active_cells) {
         apply_pressure(cell, dt_scaled);
     }
+
     clear_updated();
     for (const auto cell : m_active_cells) {
         integrate_and_collide(cell, dt_scaled);
     }
+
 }
 
 bool ParticleSystem::resolve_collision(index_t i) {
