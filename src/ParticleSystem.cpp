@@ -72,6 +72,10 @@ const void ParticleSystem::clear_updated() {
     //     m_updated_particles[i] = false;
 }
 
+static const vec3 random_dir() {
+    return glm::normalize(vec3(drand48() - 0.5f, drand48() - 0.5f, drand48() - 0.5f));
+}
+
 const void ParticleSystem::set_updated(index_t index) {
     const auto info = div(index, 32);
     // To prevent unecessary substraction, we store each integer reversed
@@ -150,8 +154,8 @@ std::vector<index_t> ParticleSystem::get_neighbors_particles(const index_t parti
     };
     for (const auto cell : neighbor_cells) {
         const auto cell_particles = get_particles_in_cell(cell);
-        for (const auto particle_index : cell_particles) {
-            particle_indices.push_back(particle_index);
+        for (const auto neighbor_particle_index : cell_particles) {
+            particle_indices.push_back(neighbor_particle_index);
         }
     }
     return particle_indices;
@@ -185,10 +189,11 @@ const vec3 ParticleSystem::calculate_pressure(index_t i) {
             continue;
         real_t dst = glm::distance(sample_point, m_predicted_positions[j]);
         vec3 dir;
-        if (dst > 0.00001f)
+        if (dst < 0.00001f) {
+            m_predicted_positions[j] += 0.0001f * random_dir();
+        } else {
             dir = (m_predicted_positions[j] - sample_point) / dst;
-        else
-            dir = vec3(1, 0, 0);
+        }
         const real_t neighbor_density = m_densities[j];
         const real_t near_neighbor_density = m_densities[j];
         const real_t shared_pressure = 0.5f *
