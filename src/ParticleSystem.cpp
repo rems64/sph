@@ -128,9 +128,7 @@ ParticleSystem::ParticleSystem(handle<Transform> transform)
     m_predicted_positions.resize(m_particles_count);
 
     for (index_t i = 0; i < m_particles_count; i++) {
-        m_positions[i] = m_extents * vec3(((float)rand() / RAND_MAX - .5f),
-                                          ((float)rand() / RAND_MAX - .5f),
-                                          ((float)rand() / RAND_MAX - .5f));
+        m_positions[i] = m_extents * vec3(drand48() - .5f, drand48() - .5f, drand48() - .5f);
         m_velocities[i] = vec3(0);
     }
 }
