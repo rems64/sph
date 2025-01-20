@@ -46,6 +46,7 @@ struct Simulation {
     bool show_transform = false;
     uint32_t step = 0;
     uint32_t stop_at_step = 0;
+    uint32_t highlight = 0;
 };
 
 // Globals doesn't own any memory, except static strings

@@ -99,6 +99,7 @@ void ParticleRenderer::render() {
         shader->set("particle_scale", 0.025f);
         shader->set("modelMat", world_matrix);
         shader->set("normMat", glm::mat3(glm::inverseTranspose(world_matrix)));
+        shader->set("first_simulated", (int)item.lock()->m_first_simulated_particle);
 
         const auto positions = item.lock()->positions();
         glBindVertexArray(m_mesh.lock()->vao());
@@ -113,6 +114,9 @@ void ParticleRenderer::render() {
 
 void ParticleRenderer::update_positions(const index_t index) {
     const auto system = m_items[index].lock();
+    if (system->positions().size() != m_positions.size()) {
+        rebuild_buffers(index);
+    }
     const auto positions = system->positions();
     m_positions = positions;
     m_colors.resize(positions.size());
@@ -130,7 +134,9 @@ void ParticleRenderer::update_colors(const index_t index) {
                                      G.debug.density_error_offset;
         // const real_t normalized_speed = glm::length(speeds[i]) / max_speed;
         // m_colors[i] = glm::vec3(normalized_speed, .5f, .5f);
+
         m_colors[i] = speed_map(density_error / G.debug.density_color_range);
+        // m_colors[i] = vec3(1, 1, 0) * system->m_is_neighbor[i] + vec3(0, 0, 1);
     }
     glNamedBufferSubData(m_color_vbo, 0, sizeof(vec3) * m_colors.size(), m_colors.data());
 }
@@ -144,6 +150,14 @@ void ParticleRenderer::add(const handle<ParticleSystem> &particle_system) {
     m_colors.resize(positions.size());
 
     m_positions = positions;
+    rebuild_buffers(m_items.size() - 1);
+}
+
+void ParticleRenderer::rebuild_buffers(const index_t index) {
+    if (m_color_vbo)
+        glDeleteBuffers(1, &m_color_vbo);
+    if (m_position_vbo)
+        glDeleteBuffers(1, &m_position_vbo);
 
     glCreateBuffers(1, &m_color_vbo);
     glNamedBufferStorage(

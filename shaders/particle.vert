@@ -8,8 +8,13 @@ out vec3 fColor;
 
 uniform float particle_scale;
 uniform mat4 modelMat, viewMat, projMat;
+uniform int first_simulated;
+
+out float wall;
 
 void main() {
-    gl_Position = projMat * viewMat * modelMat * vec4(particle_scale*aPos + aParticlePosition, 1.0);
+    float scale = (gl_InstanceID > first_simulated) ? particle_scale : 0.5 * particle_scale;
+    wall = (gl_InstanceID > first_simulated) ? 0. : 1.;
+    gl_Position = projMat * viewMat * modelMat * vec4(scale * aPos + aParticlePosition, 1.0);
     fColor = aColor;
 }

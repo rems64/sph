@@ -156,12 +156,14 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
                 G.simulation.stop_at_step = G.simulation.step;
             break;
         case GLFW_KEY_RIGHT:
-            if (!G.simulation.running)
-                G.simulation.stop_at_step++;
+            // if (!G.simulation.running)
+            //     G.simulation.stop_at_step++;
+            G.simulation.highlight++;
             break;
         case GLFW_KEY_LEFT:
-            if (!G.simulation.running)
-                G.simulation.stop_at_step--;
+            // if (!G.simulation.running)
+            //     G.simulation.stop_at_step--;
+            G.simulation.highlight--;
             break;
         case GLFW_KEY_C:
             G.resource_manager.lock()->particle_systems()[0]->transform().lock()->set_position(

@@ -50,6 +50,7 @@ public:
     void update_positions(const index_t index);
     void update_colors(const index_t index);
     void add(const handle<ParticleSystem> &particle_system);
+    void rebuild_buffers(const index_t index);
 
 private:
     handle<ShaderProgram> m_shader;
