@@ -197,7 +197,7 @@ void ParticleSystem::spawn_shell(vec3 extent) {
 }
 
 void ParticleSystem::spawn_walls() {
-    const size_t layers_count = 2;
+    const size_t layers_count = 0;
     const real_t layer_width = 0.05f;
     for (size_t layer = 0; layer < layers_count; layer++) {
         spawn_shell(m_extents - vec3(layer_width) * layer);
@@ -299,9 +299,9 @@ const vec3 ParticleSystem::calculate_viscosity(index_t i) {
 }
 
 const real_t ParticleSystem::equation_of_state(real_t density) {
-    // return std::max<real_t>(0, (density - m_target_density) * m_pressure_multiplier);
-    return std::max<real_t>(
-        0, (std::pow(density / m_target_density, 7.f) - 1) * m_pressure_multiplier);
+    return std::max<real_t>(0, (density - m_target_density) * m_pressure_multiplier);
+    // return std::max<real_t>(
+    //     0, (std::pow(density / m_target_density, 7.f) - 1) * m_pressure_multiplier);
 }
 
 const real_t ParticleSystem::convert_near_density_to_near_pressure(real_t density) {
@@ -430,8 +430,8 @@ void ParticleSystem::update(real_t dt) {
     m_tracked_particle = G.simulation.highlight;
     G.debug.missed_cells = 0;
     const real_t t = G.t.time;
-    // dt_scaled = std::min(dt * m_simulation_speed, 1.f * 60.f);
-    dt_scaled = 0.01f;
+    dt_scaled = std::min(dt * m_simulation_speed, 1.f * 60.f);
+    // dt_scaled = 0.01f;
 
     for (size_t particle_index; particle_index < m_particles_count; particle_index++) {
         if (isnan(m_positions[particle_index]))
