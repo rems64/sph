@@ -14,6 +14,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <functional>
+#include <iostream>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -207,10 +208,10 @@ void ParticleSystem::spawn_walls() {
 }
 
 ParticleSystem::ParticleSystem(handle<Transform> transform)
-    : m_transform(transform), m_simulated_particles_count(2000), m_hist_active_cells_count(100),
-      m_hist_updated_particles_count(100) {
+    : m_transform(transform), m_simulated_particles_count(500), m_hist_active_cells_count(100),
+      m_hist_updated_particles_count(100), m_first_simulated_particle(0) {
 
-    spawn_walls();
+    // spawn_walls();
 
     m_particles_count = m_positions.size() + m_simulated_particles_count;
 
@@ -220,6 +221,17 @@ ParticleSystem::ParticleSystem(handle<Transform> transform)
     m_near_densities.resize(m_particles_count);
     m_predicted_positions.resize(m_particles_count);
     m_is_neighbor.resize(m_particles_count);
+
+    // IISPH
+    m_rho.resize(m_particles_count);
+    m_v.resize(m_particles_count);
+    m_v_advection.resize(m_particles_count);
+    m_rho_advection.resize(m_particles_count);
+    m_dii.resize(m_particles_count);
+    m_p_current.resize(m_particles_count);
+    m_p_new.resize(m_particles_count);
+    m_aii.resize(m_particles_count);
+    m_sums.resize(m_particles_count);
 
     for (index_t i = m_first_simulated_particle; i < m_particles_count; i++) {
         m_positions[i] = (m_extents - 0.05f * vec3(1)) *
@@ -249,6 +261,7 @@ const vec3 ParticleSystem::calculate_pressure(index_t i) {
         vec3 dir;
         if (dst < 0.00001f) {
             m_predicted_positions[j] += 0.0001f * random_dir();
+            dst += 0.00001f;
         } else {
             dir = (m_predicted_positions[j] - sample_point) / dst;
         }
@@ -290,6 +303,7 @@ const vec3 ParticleSystem::calculate_viscosity(index_t i) {
         vec3 dir;
         if (dst < 0.00001f) {
             m_predicted_positions[j] += 0.0001f * random_dir();
+            dst += 0.00001f;
         } else {
             dir = (m_predicted_positions[j] - sample_point) / dst;
         }
@@ -422,6 +436,196 @@ void ParticleSystem::join_threads() {
     }
 }
 
+// IISPH procedures
+const void ParticleSystem::predict_advection(cellhash_t hash) {
+    vec3 gravity = glm::inverse(m_transform.lock()->rotation()) * vec3(0, 0, m_gravity);
+    const auto particles_indices = get_particles_in_cell_from_hash(hash);
+
+    for (const auto i : particles_indices) {
+        m_rho[i] = 0;
+        const auto neighbors = get_neighbors_particles(i);
+        for (const auto j : neighbors) {
+            if (i == j)
+                continue;
+            m_rho[i] += density_kernel(
+                glm::distance(m_predicted_positions[i], m_predicted_positions[j]),
+                m_smoothing_radius);
+        }
+        m_v_advection[i] = m_v[i] + gravity * dt_scaled;
+        m_dii[i] = vec3(0.);
+        for (const auto j : neighbors) {
+            if (i == j)
+                continue;
+            real_t dst = glm::distance(m_predicted_positions[i], m_predicted_positions[j]);
+
+            if (dst > m_smoothing_radius)
+                continue;
+            vec3 dir;
+            if (dst < 0.00001f) {
+                m_predicted_positions[j] += 0.0001f * random_dir();
+                dst += 0.00001f;
+            }
+            dir = (m_predicted_positions[j] - m_predicted_positions[i]) / dst;
+
+            m_dii[i] += -dir * density_derivative(dst, m_smoothing_radius);
+        }
+        m_dii[i] *= dt_scaled * dt_scaled;
+    }
+
+    for (const auto i : particles_indices) {
+        m_rho_advection[i] = m_rho[i];
+        const auto neighbors = get_neighbors_particles(i);
+        for (const auto j : neighbors) {
+            const vec3 relative_speed = m_v_advection[i] - m_v_advection[j];
+
+            if (i == j)
+                continue;
+            real_t dst = glm::distance(m_predicted_positions[i], m_predicted_positions[j]);
+
+            if (dst > m_smoothing_radius)
+                continue;
+            vec3 dir;
+            if (dst < 0.00001f) {
+                m_predicted_positions[j] += 0.0001f * random_dir();
+                dst += 0.00001f;
+            }
+            dir = (m_predicted_positions[j] - m_predicted_positions[i]) / dst;
+
+            m_rho_advection[i] += dt_scaled * glm::dot(relative_speed, dir) *
+                                  density_derivative(dst, m_smoothing_radius);
+        }
+        m_p_current[i] = 0.5f * m_p_current[i];
+        m_aii[i] = 0.;
+        for (const auto j : neighbors) {
+            if (i == j)
+                continue;
+            real_t dst = glm::distance(m_predicted_positions[i], m_predicted_positions[j]);
+
+            if (dst > m_smoothing_radius)
+                continue;
+            vec3 dir;
+            if (dst < 0.00001f) {
+                m_predicted_positions[j] += 0.0001f * random_dir();
+                dst += 0.00001f;
+            }
+            dir = (m_predicted_positions[j] - m_predicted_positions[i]) / dst;
+
+            if (m_rho[i] > 0.001f) {
+                const vec3 d_ji = -(dt_scaled * dt_scaled) / (m_rho[i] * m_rho[i]) *
+                                  density_derivative(dst, m_smoothing_radius) * dir;
+
+                m_aii[i] += glm::dot(m_dii[i] - d_ji,
+                                     density_derivative(dst, m_smoothing_radius) * dir);
+            }
+        }
+    }
+}
+const void ParticleSystem::pressure_solve(cellhash_t hash) {
+    const auto particles_indices = get_particles_in_cell_from_hash(hash);
+
+    // Relaxation factor
+    const real_t omega = 0.5f;
+
+    for (index_t l = 0; l < 10; l++) {
+        for (const auto i : particles_indices) {
+            m_sums[i] = vec3(0.);
+            const auto neighbors = get_neighbors_particles(i);
+            for (const auto j : neighbors) {
+                if (i == j)
+                    continue;
+                real_t dst = glm::distance(m_predicted_positions[i], m_predicted_positions[j]);
+
+                if (dst > m_smoothing_radius)
+                    continue;
+                vec3 dir;
+                if (dst < 0.00001f) {
+                    m_predicted_positions[j] += 0.0001f * random_dir();
+                    dst += 0.00001f;
+                }
+                dir = (m_predicted_positions[j] - m_predicted_positions[i]) / dst;
+
+                if (m_rho[i] > 0.001f)
+                    m_sums[i] += -1. / (m_rho[j] * m_rho[j]) * m_p_current[j] *
+                                 density_derivative(dst, m_smoothing_radius) * dir;
+            }
+            m_sums[i] *= dt_scaled * dt_scaled;
+        }
+
+        for (const auto i : particles_indices) {
+            m_p_new[i] = (1 - omega) * m_p_current[i];
+            real_t sum = 0.;
+
+            const auto neighbors = get_neighbors_particles(i);
+            for (const auto j : neighbors) {
+                if (i == j)
+                    continue;
+                real_t dst = glm::distance(m_predicted_positions[i], m_predicted_positions[j]);
+
+                if (dst > m_smoothing_radius)
+                    continue;
+                vec3 dir;
+                if (dst < 0.00001f) {
+                    m_predicted_positions[j] += 0.0001f * random_dir();
+                    dst += 0.00001f;
+                }
+                dir = (m_predicted_positions[j] - m_predicted_positions[i]) / dst;
+
+                if (m_rho[i] > 0.001f) {
+                    const vec3 d_ji = -(dt_scaled * dt_scaled) / (m_rho[i] * m_rho[i]) *
+                                      density_derivative(dst, m_smoothing_radius) * dir;
+                    vec3 other_sum = m_sums[j] - d_ji * m_p_current[i];
+
+                    const vec3 gradient = density_derivative(dst, m_smoothing_radius) * dir;
+                    sum += glm::dot(m_sums[i] - m_dii[j] * m_p_current[j] - other_sum, gradient);
+                }
+
+                // const auto neighbors_j = get_neighbors_particles(j);
+                // for (const auto k : neighbors) {
+                //     if (i == k)
+                //         continue;
+
+                //     real_t dst2 = glm::distance(m_predicted_positions[j],
+                //                                 m_predicted_positions[k]);
+
+                //     if (dst2 > m_smoothing_radius)
+                //         continue;
+                //     vec3 dir2;
+                //     if (dst2 < 0.00001f) {
+                //         m_predicted_positions[k] += 0.0001f * random_dir();
+                //     } else {
+                //         dir2 = (m_predicted_positions[k] - m_predicted_positions[j]) / dst2;
+                //     }
+
+                //     const vec3 d_jk = -(dt_scaled * dt_scaled) / (m_rho[k] * m_rho[k]) *
+                //                       density_derivative(dst2, m_smoothing_radius) * dir2;
+
+                //     other_sum += d_jk * m_p_current[k];
+                // }
+            }
+            real_t aii = 1.f;
+            if (m_aii[i] > 1.f)
+                aii = m_aii[i];
+            m_p_new[i] += omega / aii * (m_target_density - m_rho_advection[i] - sum);
+        }
+
+        for (const auto i : particles_indices) {
+            m_p_current[i] = m_p_new[i];
+        }
+    }
+}
+
+const void ParticleSystem::integration(cellhash_t hash) {
+    const auto particles_indices = get_particles_in_cell_from_hash(hash);
+
+    for (const auto i : particles_indices) {
+        const vec3 F_ip = 1. / (dt_scaled * dt_scaled) * (m_dii[i] * m_p_current[i] + m_sums[i]);
+        m_v[i] = m_v_advection[i] + dt_scaled * F_ip;
+        m_velocities[i] = m_v[i];
+        m_densities[i] = m_rho[i];
+        // m_positions[i] = m_positions[i] + dt_scaled * m_v[i];
+    }
+}
+
 static bool isnan(vec3 &vec) {
     return std::isnan(vec.x) || std::isnan(vec.y) || std::isnan(vec.z);
 }
@@ -462,10 +666,30 @@ void ParticleSystem::update(real_t dt) {
     // for (const auto cell : m_active_cells) {
     //     apply_gravity(cell);
     // }
+    std::cout << "predict advection" << std::endl;
+
     size_t thread_index = 0;
     for (auto hash : hashes) {
-        m_threads[thread_index++] = std::thread([this, hash]() { this->apply_gravity(hash); });
+        m_threads[thread_index++] = std::thread([this, hash]() { this->predict_advection(hash); });
     }
+    join_threads();
+    clear_updated();
+
+    std::cout << "pressure solve" << std::endl;
+    thread_index = 0;
+    for (auto hash : hashes) {
+        m_threads[thread_index++] = std::thread([this, hash]() { this->pressure_solve(hash); });
+    }
+    join_threads();
+    clear_updated();
+
+    std::cout << "integration" << std::endl;
+    thread_index = 0;
+    for (auto hash : hashes) {
+        m_threads[thread_index++] = std::thread([this, hash]() { this->integration(hash); });
+    }
+    join_threads();
+    clear_updated();
 
     // std::cout << "launched " << thread_index << " threads" << std::endl;
     // std::cout << "should have launched " << active_cells_count << std::endl;
@@ -484,28 +708,31 @@ void ParticleSystem::update(real_t dt) {
     // for (const auto cell : m_active_cells) {
     //     compute_densities(cell);
     // }
-    join_threads();
-    clear_updated();
-    thread_index = 0;
-    for (auto hash : hashes) {
-        m_threads[thread_index++] = std::thread([this, hash]() { this->compute_densities(hash); });
-    }
+    // join_threads();
+    // clear_updated();
+    // thread_index = 0;
+    // for (auto hash : hashes) {
+    //     m_threads[thread_index++] = std::thread([this, hash]() {
+    //     this->compute_densities(hash);
+    //     });
+    // }
 
     // for (const auto cell : m_active_cells) {
     //     apply_pressure(cell);
     // }
-    join_threads();
-    clear_updated();
-    thread_index = 0;
-    for (auto hash : hashes) {
-        m_threads[thread_index++] = std::thread([this, hash]() { this->apply_pressure(hash); });
-    }
+    // join_threads();
+    // clear_updated();
+    // thread_index = 0;
+    // for (auto hash : hashes) {
+    //     m_threads[thread_index++] = std::thread([this, hash]() { this->apply_pressure(hash);
+    //     });
+    // }
 
     // for (const auto cell : m_active_cells) {
     //     integrate_and_collide(cell);
     // }
-    join_threads();
-    clear_updated();
+    // join_threads();
+    // clear_updated();
     thread_index = 0;
     for (auto hash : hashes) {
         m_threads[thread_index++] = std::thread(

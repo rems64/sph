@@ -27,6 +27,7 @@ public:
     bool resolve_collision(index_t i);
 
     const void update_cell(cell_t cell);
+
     inline const void apply_gravity(cellhash_t hash);
     inline const void compute_predicted_position();
     inline const void apply_pressure(cellhash_t hash);
@@ -36,6 +37,11 @@ public:
     inline const vec3 calculate_viscosity(index_t i);
     inline const real_t equation_of_state(real_t density);
     inline const real_t convert_near_density_to_near_pressure(real_t density);
+
+    // IISPH procedures
+    inline const void predict_advection(cellhash_t hash);
+    inline const void pressure_solve(cellhash_t hash);
+    inline const void integration(cellhash_t hash);
 
     void spawn_shell(vec3 extent);
     void spawn_walls();
@@ -85,6 +91,17 @@ private:
     std::vector<real_t> m_is_neighbor;
     // std::vector<uint32_t> m_updated_particles;
     std::deque<std::atomic_bool> m_updated_particles;
+
+
+    std::vector<real_t> m_rho;
+    std::vector<vec3> m_v;
+    std::vector<vec3> m_v_advection;
+    std::vector<real_t> m_rho_advection;
+    std::vector<vec3> m_dii;
+    std::vector<real_t> m_p_current;
+    std::vector<real_t> m_p_new;
+    std::vector<real_t> m_aii;
+    std::vector<vec3> m_sums;
 
     // Found in a video from Sebastian Lague
     std::vector<std::pair<cellhash_t, index_t>> m_spatial_lookup;
